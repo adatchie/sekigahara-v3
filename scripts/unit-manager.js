@@ -82,6 +82,7 @@ export class UnitManager {
                 // ゲーム状態
                 order: null,
                 dead: false,
+                formation: null, // 陣形（本陣のみ使用: HOKO/KAKUYOKU/GYORIN）
 
                 // 描画情報 - すべて1HEXサイズ
                 radius: 0.45,

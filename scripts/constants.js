@@ -21,6 +21,11 @@ export const UNIT_TYPE_NORMAL = 'NORMAL';             // 通常ユニット
 // マルチユニットシステム定数
 export const SOLDIERS_PER_UNIT = 1000; // 1ユニットあたりの標準兵力
 
+// 陣形定数
+export const FORMATION_HOKO = 'HOKO';         // 鋒矢の陣（攻撃的・本陣前方）
+export const FORMATION_KAKUYOKU = 'KAKUYOKU'; // 鶴翼の陣（バランス型・本陣中央）
+export const FORMATION_GYORIN = 'GYORIN';     // 魚鱗の陣（防御的・本陣後方）
+
 // 性格タイプ
 export const P_BRAVE = '勇猛';
 export const P_LOYAL = '忠義';

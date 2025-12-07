@@ -157,6 +157,63 @@
             box-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
         }
 
+        .formation-toggle {
+            margin-top: 4px;
+            padding: 4px 8px;
+            font-size: 11px;
+            background: #333;
+            border: 1px solid #666;
+            color: #ffd700;
+            cursor: pointer;
+            transition: 0.2s;
+            font-family: serif;
+        }
+
+        .formation-toggle:hover {
+            background: #444;
+            border-color: #ffd700;
+        }
+
+        .formation-selector {
+            display: none;
+            margin-top: 4px;
+            gap: 3px;
+            flex-direction: column;
+            padding: 4px 0;
+        }
+
+        .formation-selector.show {
+            display: flex;
+        }
+
+        .formation-select-btn {
+            padding: 4px 8px;
+            font-size: 10px;
+            background: #2a2a2a;
+            border: 1px solid #555;
+            color: #ddd;
+            cursor: pointer;
+            transition: 0.15s;
+            font-family: serif;
+        }
+
+        .formation-select-btn:hover:not(.disabled) {
+            background: #3a3a3a;
+            border-color: #ffd700;
+        }
+
+        .formation-select-btn.active {
+            background: #554400;
+            border-color: #ffd700;
+            color: #ffd700;
+        }
+
+        .formation-select-btn.disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+
         #effect-layer {
             position: absolute;
             top: 0;
@@ -292,6 +349,72 @@
             mix-blend-mode: screen;
         }
 
+        #formation-panel {
+            position: absolute;
+            right: 30px;
+            top: 100px;
+            width: 220px;
+            background: rgba(20, 20, 30, 0.95);
+            border: 2px solid #888;
+            padding: 15px;
+            border-radius: 5px;
+            pointer-events: auto;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.7);
+            display: none;
+        }
+
+        .formation-title {
+            font-size: 14px;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #888;
+            padding-bottom: 5px;
+            color: #ffd700;
+            text-align: center;
+            letter-spacing: 1px;
+        }
+
+        .formation-btn {
+            width: 100%;
+            padding: 12px;
+            margin: 5px 0;
+            font-size: 14px;
+            cursor: pointer;
+            border: 2px solid #666;
+            background: linear-gradient(to bottom, #333, #222);
+            color: #ddd;
+            font-family: serif;
+            transition: 0.2s;
+            position: relative;
+        }
+
+        .formation-btn:hover:not(.disabled) {
+            background: linear-gradient(to bottom, #444, #333);
+            border-color: #ffd700;
+            transform: translateX(-3px);
+        }
+
+        .formation-btn.active {
+            background: linear-gradient(to bottom, #554400, #332200);
+            border-color: #ffd700;
+            box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+        }
+
+        .formation-btn.disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+            background: #222;
+        }
+
+        #formation-tooltip {
+            font-size: 11px;
+            color: #aaa;
+            margin-top: 10px;
+            min-height: 60px;
+            line-height: 1.5;
+            padding: 5px;
+            border-top: 1px solid #444;
+        }
+
         #error-log {
             position: absolute;
             top: 0;
@@ -327,6 +450,11 @@
                 <button class="ctx-btn" style="color:darkred" onclick="issueCommand('ATTACK')">突撃</button>
                 <button class="ctx-btn" style="color:darkgreen" onclick="issueCommand('PLOT')">調略</button>
                 <button class="ctx-btn" onclick="closeCtx()">取消</button>
+            </div>
+            <div id="formation-panel" class="hud-panel" style="display:none;">
+                <div class="formation-title">陣形選択</div>
+                <div id="formation-buttons"></div>
+                <div id="formation-tooltip"></div>
             </div>
         </div>
 

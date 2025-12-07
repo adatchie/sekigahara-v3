@@ -67,11 +67,29 @@ function getNeighbors(q, r) {
         .filter(isValidHex);
 }
 
-// 他のユニットが障害物となるかチェック
-function isBlocked(q, r, units, movingUnitId, movingUnitRadius) {
+// 他のユニットが障害物となるかチェック（味方と敵を区別）
+function getBlockingInfo(q, r, units, movingUnit) {
+    for (const u of units) {
+        if (u.id === movingUnit.id || u.dead) continue;
+
+        const dist = getDistRaw(q, r, u.q, u.r);
+        if (dist < (movingUnit.radius + u.radius)) {
+            return {
+                blocked: true,
+                isFriendly: u.side === movingUnit.side,
+                unit: u
+            };
+        }
+    }
+    return { blocked: false, isFriendly: false, unit: null };
+}
+
+// 従来のisBlocked関数（敵ユニットのみブロック）
+function isBlocked(q, r, units, movingUnitId, movingUnitRadius, movingUnitSide) {
     return units.some(u =>
         u.id !== movingUnitId &&
         !u.dead &&
+        u.side !== movingUnitSide && // 敵のみブロック
         getDistRaw(q, r, u.q, u.r) < (movingUnitRadius + u.radius)
     );
 }
@@ -86,16 +104,20 @@ export function findPath(startQ, startR, goalQ, goalR, units, movingUnit) {
         return [{ q: startQ, r: startR }];
     }
 
-    // 直線距離が近い場合は直線パスを試す
+    // 直線距離が近い場合は直線パスを試す（敵ユニットのみチェック）
     const straightPath = getLine(startQ, startR, goalQ, goalR);
     let blocked = false;
     for (let i = 1; i < straightPath.length; i++) {
-        if (isBlocked(straightPath[i].q, straightPath[i].r, units, movingUnit.id, movingUnit.radius)) {
+        const blockInfo = getBlockingInfo(straightPath[i].q, straightPath[i].r, units, movingUnit);
+        // 敵ユニットのみブロック扱い
+        if (blockInfo.blocked && !blockInfo.isFriendly) {
             blocked = true;
             break;
         }
     }
-    if (!blocked) return straightPath;
+    if (!blocked) {
+        return straightPath;
+    }
 
     // A*探索
     const openSet = [{ q: startQ, r: startR }];
@@ -141,14 +163,24 @@ export function findPath(startQ, startR, goalQ, goalR, units, movingUnit) {
 
             if (closedSet.has(neighborKey)) continue;
 
-            // 障害物をチェック（ゴールは除く）
+            // ブロック情報を取得
+            const blockInfo = getBlockingInfo(neighbor.q, neighbor.r, units, movingUnit);
+
+            // ゴールでない場合の障害物チェック
             if (!(neighbor.q === goalQ && neighbor.r === goalR)) {
-                if (isBlocked(neighbor.q, neighbor.r, units, movingUnit.id, movingUnit.radius)) {
+                // 敵ユニットは完全にブロック
+                if (blockInfo.blocked && !blockInfo.isFriendly) {
                     continue;
                 }
             }
 
-            const tentativeGScore = (gScore.get(currentKey) || Infinity) + 1;
+            // 移動コストを計算（味方ユニットがいる場合は高コスト）
+            let moveCost = 1;
+            if (blockInfo.blocked && blockInfo.isFriendly) {
+                moveCost = 10; // 味方がいる場合は10倍のコスト（迂回を促す）
+            }
+
+            const tentativeGScore = (gScore.get(currentKey) || Infinity) + moveCost;
 
             if (tentativeGScore < (gScore.get(neighborKey) || Infinity)) {
                 cameFrom.set(neighborKey, current);

@@ -4,6 +4,7 @@
  */
 
 import { getDist, getDistRaw } from './pathfinding.js';
+import { FORMATION_HOKO, FORMATION_KAKUYOKU, FORMATION_GYORIN, UNIT_TYPE_HEADQUARTERS } from './constants.js';
 
 export class AISystem {
     constructor() {
@@ -161,5 +162,93 @@ export class AISystem {
      */
     reset() {
         this.evaluationCache.clear();
+    }
+
+    /**
+     * CPUの陣形を決定
+     * @param {Object} hqUnit - 本陣ユニット
+     * @param {Array} allUnits - 全ユニット
+     * @param {number} subordinateCount - 配下ユニット数
+     * @returns {string} - 選択する陣形
+     */
+    decideFormation(hqUnit, allUnits, subordinateCount) {
+        // 1. 本陣兵力による強制陣形
+        if (hqUnit.soldiers <= 500) {
+            return FORMATION_GYORIN; // 魚鱗
+        }
+        if (hqUnit.soldiers <= 800) {
+            return FORMATION_KAKUYOKU; // 鶴翼
+        }
+
+        // 2. 配下ユニット数による制限
+        if (subordinateCount < 1) {
+            return FORMATION_HOKO; // 鋒矢のみ選択可
+        }
+        if (subordinateCount < 2) {
+            // 鶴翼まで選択可
+            // 兵力比率で判定
+            const { friendly, enemy } = this.countNearbyForces(hqUnit, allUnits, 5);
+            const ratio = friendly / (enemy || 1);
+            return ratio >= 1.5 ? FORMATION_HOKO : FORMATION_KAKUYOKU;
+        }
+
+        // 3. 周囲5HEX以内の敵味方兵力を計算
+        const { friendly, enemy } = this.countNearbyForces(hqUnit, allUnits, 5);
+
+        // 4. 兵力比率で判定
+        const ratio = friendly / (enemy || 1);
+
+        // 総大将（徳川家康・石田三成）は特別扱い：より保守的な判定
+        const isCommander = (hqUnit.name === '徳川家康' || hqUnit.name === '石田三成');
+
+        if (isCommander) {
+            // 総大将は2倍以上の圧倒的優勢でない限り防御的な陣形
+            if (ratio >= 2.0) {
+                console.log(`[総大将陣形] ${hqUnit.name}: 圧倒的優勢(${ratio.toFixed(2)}) → 鋒矢`);
+                return FORMATION_HOKO;      // 鋒矢（圧倒的優勢）
+            } else if (ratio <= 0.67) {
+                console.log(`[総大将陣形] ${hqUnit.name}: 劣勢(${ratio.toFixed(2)}) → 魚鱗`);
+                return FORMATION_GYORIN;    // 魚鱗（劣勢）
+            } else {
+                console.log(`[総大将陣形] ${hqUnit.name}: 通常(${ratio.toFixed(2)}) → 鶴翼`);
+                return FORMATION_KAKUYOKU;  // 鶴翼（通常時はこれ）
+            }
+        } else {
+            // 通常の武将は従来通り
+            if (ratio >= 1.5) {
+                return FORMATION_HOKO;      // 鋒矢（優勢）
+            } else if (ratio <= 0.67) {
+                return FORMATION_GYORIN;    // 魚鱗（劣勢）
+            } else {
+                return FORMATION_KAKUYOKU;  // 鶴翼（拮抗）
+            }
+        }
+    }
+
+    /**
+     * 周囲の兵力を計算
+     * @param {Object} hqUnit - 本陣ユニット
+     * @param {Array} allUnits - 全ユニット
+     * @param {number} radius - 半径（HEX）
+     * @returns {{friendly: number, enemy: number}} - 味方と敵の兵力
+     */
+    countNearbyForces(hqUnit, allUnits, radius) {
+        let friendly = 0;
+        let enemy = 0;
+
+        for (const unit of allUnits) {
+            if (unit.dead) continue;
+
+            const dist = getDistRaw(hqUnit.q, hqUnit.r, unit.q, unit.r);
+            if (dist <= radius) {
+                if (unit.side === hqUnit.side) {
+                    friendly += unit.soldiers;
+                } else {
+                    enemy += unit.soldiers;
+                }
+            }
+        }
+
+        return { friendly, enemy };
     }
 }

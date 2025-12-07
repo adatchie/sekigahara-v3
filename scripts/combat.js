@@ -7,17 +7,24 @@ import { getDist, getDistRaw, getFacingAngle, findPath } from './pathfinding.js'
 import { hexToPixel } from './pathfinding.js';
 import { DIALOGUE } from './constants.js';
 import { generatePortrait } from './rendering.js';
+import { getFormationModifiers, canMoveWithFormation, checkForcedFormationChange, FORMATION_INFO } from './formation.js';
+import { UNIT_TYPE_HEADQUARTERS } from './constants.js';
 
 export class CombatSystem {
-    constructor(audioEngine) {
+    constructor(audioEngine, unitManager = null) {
         this.audioEngine = audioEngine;
         this.activeEffects = [];
         this.activeBubbles = [];
         this.playerSide = 'EAST'; // デフォルト値
+        this.unitManager = unitManager; // 陣形チェック用
     }
 
     setPlayerSide(side) {
         this.playerSide = side;
+    }
+
+    setUnitManager(unitManager) {
+        this.unitManager = unitManager;
     }
 
     /**
@@ -25,6 +32,19 @@ export class CombatSystem {
      */
     async processUnit(unit, allUnits, map, warlordPlotUsed = {}) {
         if (!unit.order) return;
+
+        console.log(`[processUnit] ${unit.name} (${unit.unitType}): order=${unit.order.type}, formation=${unit.formation}`);
+
+        // 本陣ユニットの場合、兵力による強制陣形変更をチェック
+        if (unit.unitType === UNIT_TYPE_HEADQUARTERS && this.unitManager) {
+            const forceChange = checkForcedFormationChange(unit.soldiers, unit.formation);
+            if (forceChange.needsChange) {
+                unit.formation = forceChange.newFormation;
+                const info = FORMATION_INFO[forceChange.newFormation];
+                this.showFormation(unit, info.nameShort);
+                console.log(`強制陣形変更: ${unit.name} -> ${info.nameShort} (兵力: ${unit.soldiers})`);
+            }
+        }
 
         const target = allUnits.find(u => u.id === unit.order.targetId);
         const reach = (unit.size + (target ? target.size : 1)) / 2.0 + 0.5;
@@ -128,12 +148,34 @@ export class CombatSystem {
 
     /**
      * 移動を処理
+     * 本陣の場合は陣形制限をチェック
      */
     async processMove(unit, allUnits) {
+        console.log(`[processMove] START: ${unit.name}, unitType=${unit.unitType}, formation=${unit.formation}`);
+
         const dest = unit.order.targetHex;
         if (getDistRaw(unit.q, unit.r, dest.q, dest.r) === 0) {
             unit.order = null;
         } else {
+            // 本陣の場合、陣形制限をチェック
+            if (unit.unitType === UNIT_TYPE_HEADQUARTERS && unit.formation && this.unitManager) {
+                const subordinates = this.unitManager.getUnitsByWarlordId(unit.warlordId)
+                    .filter(u => !u.dead && u.unitType !== UNIT_TYPE_HEADQUARTERS);
+
+                console.log(`[陣形チェック] ${unit.name}: 陣形=${unit.formation}, 配下=${subordinates.length}体, 目標=(${dest.q},${dest.r})`);
+
+                const canMove = canMoveWithFormation(unit, subordinates, dest.q, dest.r, unit.formation);
+
+                console.log(`[陣形チェック結果] ${unit.name}: 移動可=${canMove}`);
+
+                if (!canMove) {
+                    // 陣形要件を満たさない場合、移動をキャンセル（陣形は維持）
+                    console.log(`❌ 陣形制限により移動キャンセル: ${unit.name} (${unit.formation})`);
+                    // 移動をスキップ（その場にとどまる）
+                    return;
+                }
+            }
+
             await this.moveUnitStep(unit, dest, allUnits);
         }
     }
@@ -268,8 +310,14 @@ export class CombatSystem {
 
         if (dirMsg) this.spawnText(def.pos, dirMsg, "#ffff00", 40);
 
-        // ダメージ計算
-        let dmgToDef = Math.floor((Math.sqrt(att.soldiers) * att.atk * mod * dirMod) / (def.def / 15));
+        // 陣形によるステータス修正
+        const attFormation = getFormationModifiers(att.formation);
+        const defFormation = getFormationModifiers(def.formation);
+        const finalAtkStat = att.atk + attFormation.atk;
+        const finalDefStat = def.def + defFormation.def;
+
+        // ダメージ計算（陣形修正を適用）
+        let dmgToDef = Math.floor((Math.sqrt(att.soldiers) * finalAtkStat * mod * dirMod) / (finalDefStat / 15));
         if (dmgToDef < 10) dmgToDef = 10;
         const dmgToAtt = Math.floor(dmgToDef * 0.2);
 
@@ -387,6 +435,15 @@ export class CombatSystem {
             color: color,
             life: life
         });
+    }
+
+    /**
+     * 陣形表示（ダメージ表示と同じ要領）
+     * @param {Object} unit - 本陣ユニット
+     * @param {string} formationName - 陣形名（鋒矢/鶴翼/魚鱗）
+     */
+    showFormation(unit, formationName) {
+        this.spawnText(unit.pos, `【${formationName}】`, '#ffd700', 80);
     }
 
     async spawnEffect(type, u1, u2) {

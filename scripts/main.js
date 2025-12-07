@@ -3,7 +3,7 @@
  * メインゲームロジックとループ
  */
 
-import { HEX_SIZE, C_EAST, C_WEST, C_SEL_BOX, C_SEL_BORDER, WARLORDS, UNIT_TYPE_HEADQUARTERS } from './constants.js';
+import { HEX_SIZE, C_EAST, C_WEST, C_SEL_BOX, C_SEL_BORDER, WARLORDS, UNIT_TYPE_HEADQUARTERS, FORMATION_HOKO, FORMATION_KAKUYOKU, FORMATION_GYORIN } from './constants.js';
 import { AudioEngine } from './audio.js';
 import { MapSystem } from './map.js';
 import { RenderingEngine, generatePortrait } from './rendering.js';
@@ -11,6 +11,7 @@ import { CombatSystem } from './combat.js';
 import { AISystem } from './ai.js';
 import { UnitManager } from './unit-manager.js';
 import { hexToPixel, pixelToHex, isValidHex, getDistRaw } from './pathfinding.js';
+import { FORMATION_INFO, getAvailableFormations } from './formation.js';
 
 export class Game {
     constructor() {
@@ -50,6 +51,7 @@ export class Game {
         window.addEventListener('mousemove', (e) => this.onMouseMove(e));
         window.addEventListener('mouseup', (e) => this.onMouseUp(e));
         this.canvas.addEventListener('wheel', (e) => this.onWheel(e));
+        window.addEventListener('keydown', (e) => this.onKeyDown(e));
 
         requestAnimationFrame(() => this.loop());
     }
@@ -83,6 +85,9 @@ export class Game {
         // 調略フラグを初期化（武将単位で管理）
         this.warlordPlotUsed = {}; // warlordId -> boolean
 
+        // CombatSystemにunitManagerを設定（陣形チェック用）
+        this.combatSystem.setUnitManager(this.unitManager);
+
         // カメラ位置
         const center = hexToPixel(30, 30);
         this.camera.x = this.canvas.width / 2 - center.x;
@@ -94,6 +99,26 @@ export class Game {
 
     async commitTurn() {
         if (this.gameState !== 'ORDER') return;
+
+        // CPU AIの陣形を決定（本陣ユニットのみ）
+        const cpuHeadquarters = this.units.filter(u =>
+            u.side !== this.playerSide &&
+            !u.dead &&
+            u.unitType === UNIT_TYPE_HEADQUARTERS
+        );
+
+        cpuHeadquarters.forEach(hq => {
+            const subordinates = this.unitManager.getUnitsByWarlordId(hq.warlordId)
+                .filter(u => !u.dead && u.unitType !== UNIT_TYPE_HEADQUARTERS);
+
+            const formation = this.aiSystem.decideFormation(hq, this.units, subordinates.length);
+
+            // 陣形が変わった場合のみ更新
+            if (hq.formation !== formation) {
+                hq.formation = formation;
+                console.log(`CPU陣形設定: ${hq.name} -> ${formation}`);
+            }
+        });
 
         // CPU AIの命令を設定
         this.units.filter(u => u.side !== this.playerSide && !u.dead).forEach(cpu => {
@@ -270,6 +295,15 @@ export class Game {
         if (this.camera.zoom > 2.0) this.camera.zoom = 2.0;
     }
 
+    onKeyDown(e) {
+        // ESC\u30ad\u30fc\u3067\u9078\u629e\u89e3\u9664\u3068\u30d1\u30cd\u30eb\u3092\u9589\u3058\u308b
+        if (e.key === 'Escape') {
+            this.selectedUnits = [];
+            this.updateSelectionUI([]);
+            document.getElementById('context-menu').style.display = 'none';
+        }
+    }
+
     handleLeftClick(mx, my) {
         const h = pixelToHex(mx, my, this.camera);
         if (!isValidHex(h)) return;
@@ -287,6 +321,7 @@ export class Game {
                 const warlordUnits = this.unitManager.getUnitsByWarlordId(u.warlordId);
                 this.selectedUnits = warlordUnits.filter(unit => !unit.dead);
                 this.updateSelectionUI(this.selectedUnits);
+                // 陣形はユニットカード内に表示される
             } else {
                 this.updateSelectionUI([u]);
                 if (this.selectedUnits.length > 0 && this.selectedUnits[0].side === this.playerSide) {
@@ -300,13 +335,13 @@ export class Game {
             }
         } else {
             if (this.selectedUnits.length > 0 && this.selectedUnits[0].side === this.playerSide) {
+                // 移動命令を設定（選択は維持）
                 this.selectedUnits.forEach(su =>
                     su.order = { type: 'MOVE', targetHex: { q: h.q, r: h.r } }
                 );
-                // 命令を出したら選択解除
-                this.selectedUnits = [];
-                this.updateSelectionUI([]);
+                // 選択を維持して陣形パネルも維持
             } else {
+                // 選択状態でなければ、選択解除
                 this.selectedUnits = [];
                 this.updateSelectionUI([]);
             }
@@ -334,15 +369,96 @@ export class Game {
             this.selectedUnits.forEach(u => {
                 u.order = { type: type, targetId: this.targetContextUnit.id };
             });
-            // 命令を出したら選択解除
-            this.selectedUnits = [];
-            this.updateSelectionUI([]);
+            // 攻撃/調略命令を出しても選択は維持
         }
         this.closeCtx();
     }
 
     closeCtx() {
         document.getElementById('context-menu').style.display = 'none';
+        // 陣形パネルは閉じない（選択を維持）
+    }
+
+    /**
+     * 陣形選択パネルを表示
+     * @param {Object} hqUnit - 本陣ユニット
+     * @param {Array} subordinates - 配下ユニット（本陣を除く）
+     */
+    showFormationPanel(hqUnit, subordinates) {
+        const panel = document.getElementById('formation-panel');
+        const buttonsContainer = document.getElementById('formation-buttons');
+        const tooltip = document.getElementById('formation-tooltip');
+
+        // パネルを表示
+        panel.style.display = 'block';
+
+        // ボタンをクリア
+        buttonsContainer.innerHTML = '';
+
+        // 選択可能な陣形を取得
+        const availableFormations = getAvailableFormations(subordinates.length);
+        const allFormations = [FORMATION_HOKO, FORMATION_KAKUYOKU, FORMATION_GYORIN];
+
+        // 各陣形のボタンを生成
+        allFormations.forEach(formationType => {
+            const info = FORMATION_INFO[formationType];
+            const isAvailable = availableFormations.includes(formationType);
+            const isActive = hqUnit.formation === formationType;
+
+            const btn = document.createElement('button');
+            btn.className = 'formation-btn';
+            btn.textContent = info.nameShort;
+
+            if (!isAvailable) {
+                btn.classList.add('disabled');
+            }
+            if (isActive) {
+                btn.classList.add('active');
+            }
+
+            // マウスオーバーで説明を表示
+            btn.onmouseenter = () => {
+                tooltip.textContent = info.description;
+            };
+            btn.onmouseleave = () => {
+                tooltip.textContent = '';
+            };
+
+            // クリックで陣形を設定
+            if (isAvailable) {
+                btn.onclick = () => {
+                    this.setFormation(hqUnit, formationType);
+                };
+            }
+
+            buttonsContainer.appendChild(btn);
+        });
+    }
+
+    /**
+     * 陣形選択パネルを非表示
+     */
+    hideFormationPanel() {
+        const panel = document.getElementById('formation-panel');
+        panel.style.display = 'none';
+    }
+
+    /**
+     * 陣形を設定
+     * @param {Object} hqUnit - 本陣ユニット
+     * @param {string} formation - 陣形タイプ
+     */
+    setFormation(hqUnit, formation) {
+        hqUnit.formation = formation;
+        const info = FORMATION_INFO[formation];
+
+        // 陣形名を表示
+        this.combatSystem.showFormation(hqUnit, info.nameShort);
+
+        // パネルを更新（activeクラスを適用）
+        const warlordUnits = this.unitManager.getUnitsByWarlordId(hqUnit.warlordId);
+        const subordinates = warlordUnits.filter(u => !u.dead && u.unitType !== UNIT_TYPE_HEADQUARTERS);
+        this.showFormationPanel(hqUnit, subordinates);
     }
 
     updateHUD() {
@@ -406,10 +522,78 @@ export class Game {
             }
 
             const info = document.createElement('div');
+            info.style.flex = '1';
             info.innerHTML = `<strong>${headquarters.name}</strong><br>兵: ${totalSoldiers} (${unitCount}部隊) <small>(攻${headquarters.atk}/防${headquarters.def})</small><br>指示: ${ord}`;
 
             d.appendChild(img);
             d.appendChild(info);
+
+            // 本陣の場合、陣形ボタンを追加
+            if (headquarters.unitType === UNIT_TYPE_HEADQUARTERS && headquarters.side === this.playerSide) {
+                console.log('Creating formation controls for:', headquarters.name, 'Type:', headquarters.unitType, 'Side:', headquarters.side, 'PlayerSide:', this.playerSide);
+
+                const formationContainer = document.createElement('div');
+                formationContainer.style.display = 'flex';
+                formationContainer.style.flexDirection = 'column';
+                formationContainer.style.marginLeft = 'auto';
+
+                // 陣形トグルボタン
+                const toggleBtn = document.createElement('button');
+                toggleBtn.className = 'formation-toggle';
+                const currentFormation = headquarters.formation ? FORMATION_INFO[headquarters.formation].nameShort : '陣形';
+                toggleBtn.textContent = currentFormation;
+                toggleBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    const selector = formationContainer.querySelector('.formation-selector');
+                    selector.classList.toggle('show');
+                };
+
+                // 陣形セレクター
+                const selector = document.createElement('div');
+                selector.className = 'formation-selector';
+
+                const subordinates = units.filter(u => !u.dead && u.unitType !== UNIT_TYPE_HEADQUARTERS);
+                const availableFormations = getAvailableFormations(subordinates.length);
+                const allFormations = [FORMATION_HOKO, FORMATION_KAKUYOKU, FORMATION_GYORIN];
+
+                allFormations.forEach(formationType => {
+                    const info = FORMATION_INFO[formationType];
+                    const isAvailable = availableFormations.includes(formationType);
+                    const isActive = headquarters.formation === formationType;
+
+                    const btn = document.createElement('button');
+                    btn.className = 'formation-select-btn';
+                    btn.textContent = info.nameShort;
+                    btn.title = info.description;
+
+                    if (!isAvailable) {
+                        btn.classList.add('disabled');
+                    }
+                    if (isActive) {
+                        btn.classList.add('active');
+                    }
+
+                    if (isAvailable) {
+                        btn.onclick = (e) => {
+                            e.stopPropagation();
+                            headquarters.formation = formationType;
+                            this.combatSystem.showFormation(headquarters, info.nameShort);
+                            this.updateSelectionUI(this.selectedUnits); // UI更新
+                        };
+                    }
+
+                    selector.appendChild(btn);
+                });
+
+                formationContainer.appendChild(toggleBtn);
+                formationContainer.appendChild(selector);
+                d.appendChild(formationContainer);
+
+                console.log('Formation controls created successfully');
+            } else {
+                console.log('Skipping formation controls for:', headquarters.name, 'Type:', headquarters.unitType, 'isHQ:', headquarters.unitType === UNIT_TYPE_HEADQUARTERS, 'isPlayerSide:', headquarters.side === this.playerSide);
+            }
+
             container.appendChild(d);
         });
     }
