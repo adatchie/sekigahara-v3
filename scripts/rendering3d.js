@@ -68,8 +68,19 @@ export class RenderingEngine3D {
     }
 
     setupGround() {
-        // 地面（シンプルな平面）
-        const groundGeometry = new THREE.PlaneGeometry(MAP_W * HEX_SIZE * 2, MAP_H * HEX_SIZE * 2);
+        // ヘックスグリッドの実際のサイズを計算
+        // pointy-top hexの場合：
+        // 幅 = MAP_W * sqrt(3) * HEX_SIZE + (MAP_H-1) * sqrt(3)/2 * HEX_SIZE
+        // 高さ = (MAP_H-1) * 1.5 * HEX_SIZE + 2*HEX_SIZE
+        const gridWidth = MAP_W * Math.sqrt(3) * HEX_SIZE + (MAP_H - 1) * Math.sqrt(3) / 2 * HEX_SIZE;
+        const gridHeight = (MAP_H - 1) * 1.5 * HEX_SIZE + 2 * HEX_SIZE;
+
+        // グリッドの中心位置を計算
+        const centerX = (gridWidth - Math.sqrt(3) * HEX_SIZE) / 2;
+        const centerZ = (gridHeight - 2 * HEX_SIZE) / 2;
+
+        // 地面（グリッドより少し大きめ）
+        const groundGeometry = new THREE.PlaneGeometry(gridWidth * 1.2, gridHeight * 1.2);
         const groundMaterial = new THREE.MeshStandardMaterial({
             color: 0x3a5a3a,
             roughness: 0.8,
@@ -77,6 +88,7 @@ export class RenderingEngine3D {
         });
         const ground = new THREE.Mesh(groundGeometry, groundMaterial);
         ground.rotation.x = -Math.PI / 2; // XZ平面に配置
+        ground.position.set(centerX, 0, centerZ); // グリッドの中心に配置
         ground.receiveShadow = true;
         this.scene.add(ground);
 
