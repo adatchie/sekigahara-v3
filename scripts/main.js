@@ -6,7 +6,8 @@
 import { HEX_SIZE, C_EAST, C_WEST, C_SEL_BOX, C_SEL_BORDER, WARLORDS, UNIT_TYPE_HEADQUARTERS, FORMATION_HOKO, FORMATION_KAKUYOKU, FORMATION_GYORIN } from './constants.js';
 import { AudioEngine } from './audio.js';
 import { MapSystem } from './map.js';
-import { RenderingEngine, generatePortrait } from './rendering.js';
+import { RenderingEngine3D } from './rendering3d.js';
+import { generatePortrait } from './rendering.js';
 import { CombatSystem } from './combat.js';
 import { AISystem } from './ai.js';
 import { UnitManager } from './unit-manager.js';
@@ -41,8 +42,11 @@ export class Game {
 
     init() {
         this.canvas = document.getElementById('gameCanvas');
-        this.ctx = this.canvas.getContext('2d');
-        this.renderingEngine = new RenderingEngine(this.canvas, this.ctx);
+        // 2Dコンテキストは不要になる
+        // this.ctx = this.canvas.getContext('2d');
+
+        // 3Dレンダラーに切り替え
+        this.renderingEngine = new RenderingEngine3D(this.canvas);
         this.combatSystem = new CombatSystem(this.audioEngine);
 
         this.resize();
@@ -57,8 +61,10 @@ export class Game {
     }
 
     resize() {
-        this.canvas.width = window.innerWidth;
-        this.canvas.height = window.innerHeight;
+        // 3Dレンダラーのリサイズメソッドを呼ぶ
+        if (this.renderingEngine) {
+            this.renderingEngine.resize();
+        }
     }
 
     startGame(side) {
@@ -195,58 +201,9 @@ export class Game {
     }
 
     loop() {
-        this.ctx.fillStyle = '#050505';
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-
-        const map = this.mapSystem.getMap();
-        if (map.length > 0) {
-            // マップ描画
-            for (let r = 0; r < map.length; r++) {
-                for (let q = 0; q < map[r].length; q++) {
-                    const p = hexToPixel(q, r);
-                    const sx = p.x * this.camera.zoom + this.camera.x;
-                    const sy = p.y * this.camera.zoom + this.camera.y;
-
-                    if (sx < -60 || sx > this.canvas.width + 60 ||
-                        sy < -60 || sy > this.canvas.height + 60) continue;
-
-                    this.renderingEngine.drawHex(sx, sy, map[r][q], this.camera);
-                }
-            }
-
-            // 指示線描画（目標設定フェイズのみ）
-            if (this.gameState === 'ORDER') {
-                // 味方全ユニットの命令ラインを表示（薄い色）
-                this.units.forEach(u => {
-                    if (u.side === this.playerSide && !u.dead && u.order) {
-                        const isSelected = this.selectedUnits.includes(u);
-                        this.renderingEngine.drawOrderLine(u, this.units, this.camera, isSelected);
-                    }
-                });
-            }
-
-            // ユニット描画
-            this.units.forEach(u => {
-                if (!u.dead) {
-                    this.renderingEngine.drawUnit(u, this.camera, this.selectedUnits);
-                }
-            });
-
-            // エフェクトとバブル描画
-            this.combatSystem.updateEffects();
-            this.renderingEngine.drawEffects(this.combatSystem.activeEffects, this.camera);
-            this.renderingEngine.drawBubbles(this.combatSystem.activeBubbles, this.camera);
-
-            // 選択ボックス描画
-            if (this.input.isLeftDown) {
-                const w = this.input.curr.x - this.input.start.x;
-                const h = this.input.curr.y - this.input.start.y;
-                this.ctx.fillStyle = C_SEL_BOX;
-                this.ctx.fillRect(this.input.start.x, this.input.start.y, w, h);
-                this.ctx.strokeStyle = C_SEL_BORDER;
-                this.ctx.strokeRect(this.input.start.x, this.input.start.y, w, h);
-            }
-        }
+        // 3Dレンダラーが自動的にアニメーションループを持っているので
+        // ここでは2D UIの更新のみ行う
+        // 将来的にはユニットやエフェクトを3Dで描画する
 
         requestAnimationFrame(() => this.loop());
     }
