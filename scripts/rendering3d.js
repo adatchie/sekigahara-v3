@@ -200,8 +200,10 @@ export class RenderingEngine3D {
         const vertices = [];
 
         // 中心点の高さをRaycastで取得（各ヘックス1回のみ）
-        let hexHeight = 5; // デフォルトの高さ
+        // TODO: Raycastが機能していないため、一時的に固定の高さを使用
+        let hexHeight = 120; // 固定の高さ（地形の最高点より上）
 
+        /*
         if (this.groundMesh) {
             const raycaster = new THREE.Raycaster();
             const rayOrigin = new THREE.Vector3(center.x, 200, center.z);
@@ -213,6 +215,7 @@ export class RenderingEngine3D {
                 hexHeight = intersects[0].point.y + 20; // 地形の高さ + 十分な余白
             }
         }
+        */
 
         // 全頂点を同じ高さで配置
         for (let i = 0; i < 6; i++) {
