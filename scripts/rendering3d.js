@@ -83,10 +83,10 @@ export class RenderingEngine3D {
         const textureLoader = new THREE.TextureLoader();
         const groundTexture = textureLoader.load('./assets/textures/ground_sekigahara.jpg');
 
-        // テクスチャの繰り返し設定
-        groundTexture.wrapS = THREE.RepeatWrapping;
-        groundTexture.wrapT = THREE.RepeatWrapping;
-        groundTexture.repeat.set(8, 8); // 8x8回繰り返し
+        // テクスチャを繰り返さない（史実の地形マップとして使用）
+        groundTexture.wrapS = THREE.ClampToEdgeWrapping;
+        groundTexture.wrapT = THREE.ClampToEdgeWrapping;
+        // repeat設定は不要（繰り返さないため）
 
         // テクスチャのフィルタリング設定（よりきれいに表示）
         groundTexture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
@@ -104,8 +104,64 @@ export class RenderingEngine3D {
         ground.receiveShadow = true;
         this.scene.add(ground);
 
+        // グリッド外のエリアを暗くするオーバーレイ（プレイエリアを明確化）
+        this.createOutOfBoundsOverlay(gridWidth, gridHeight, centerX, centerZ);
+
         // ヘックスグリッドの描画
         this.drawHexGrid();
+    }
+
+    /**
+     * グリッド外のエリアを暗くするオーバーレイを作成
+     */
+    createOutOfBoundsOverlay(gridWidth, gridHeight, centerX, centerZ) {
+        // グリッド境界を示すフレーム（4辺）
+        const frameThickness = 2000; // フレームの厚さ
+        const overlayColor = 0x1a1a1a; // 暗いグレー
+        const overlayOpacity = 0.7; // 透明度
+
+        const frameMaterial = new THREE.MeshBasicMaterial({
+            color: overlayColor,
+            transparent: true,
+            opacity: overlayOpacity,
+            side: THREE.DoubleSide
+        });
+
+        // 上辺のフレーム
+        const topFrame = new THREE.Mesh(
+            new THREE.PlaneGeometry(gridWidth * 1.2 + frameThickness * 2, frameThickness),
+            frameMaterial
+        );
+        topFrame.rotation.x = -Math.PI / 2;
+        topFrame.position.set(centerX, 0.2, centerZ - gridHeight * 1.2 / 2 - frameThickness / 2);
+        this.scene.add(topFrame);
+
+        // 下辺のフレーム
+        const bottomFrame = new THREE.Mesh(
+            new THREE.PlaneGeometry(gridWidth * 1.2 + frameThickness * 2, frameThickness),
+            frameMaterial
+        );
+        bottomFrame.rotation.x = -Math.PI / 2;
+        bottomFrame.position.set(centerX, 0.2, centerZ + gridHeight * 1.2 / 2 + frameThickness / 2);
+        this.scene.add(bottomFrame);
+
+        // 左辺のフレーム
+        const leftFrame = new THREE.Mesh(
+            new THREE.PlaneGeometry(frameThickness, gridHeight * 1.2),
+            frameMaterial
+        );
+        leftFrame.rotation.x = -Math.PI / 2;
+        leftFrame.position.set(centerX - gridWidth * 1.2 / 2 - frameThickness / 2, 0.2, centerZ);
+        this.scene.add(leftFrame);
+
+        // 右辺のフレーム
+        const rightFrame = new THREE.Mesh(
+            new THREE.PlaneGeometry(frameThickness, gridHeight * 1.2),
+            frameMaterial
+        );
+        rightFrame.rotation.x = -Math.PI / 2;
+        rightFrame.position.set(centerX + gridWidth * 1.2 / 2 + frameThickness / 2, 0.2, centerZ);
+        this.scene.add(rightFrame);
     }
 
     /**
