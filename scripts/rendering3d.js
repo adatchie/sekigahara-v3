@@ -120,7 +120,7 @@ export class RenderingEngine3D {
         // グリッド外なら暗いヘックス形状のオーバーレイを配置
 
         const overlayColor = 0x000000; // 黒
-        const overlayOpacity = 0.25; // 透明度（さらに薄く）
+        const overlayOpacity = 0.35; // 透明度（ヘックス単位のみなので少し濃くする）
 
         // より広い範囲をチェック（グリッドより大きい範囲）
         const checkRangeQ = MAP_W + 20; // 外側も広くカバー
@@ -134,74 +134,6 @@ export class RenderingEngine3D {
                 }
             }
         }
-
-        // 地面全体にも大きなオーバーレイを追加（三角形の緑部分もカバー）
-        const groundOverlaySize = Math.max(gridWidth, gridHeight) * 2;
-        const shape = new THREE.Shape();
-        shape.moveTo(-groundOverlaySize / 2, -groundOverlaySize / 2);
-        shape.lineTo(groundOverlaySize / 2, -groundOverlaySize / 2);
-        shape.lineTo(groundOverlaySize / 2, groundOverlaySize / 2);
-        shape.lineTo(-groundOverlaySize / 2, groundOverlaySize / 2);
-        shape.lineTo(-groundOverlaySize / 2, -groundOverlaySize / 2);
-
-        // 中央に穴（ヘックスグリッドエリア - 実際のグリッドサイズに合わせる）
-        const hole = new THREE.Path();
-        const holeHalfWidth = gridWidth / 2;
-        const holeHalfHeight = gridHeight / 2;
-        hole.moveTo(-holeHalfWidth, -holeHalfHeight);
-        hole.lineTo(holeHalfWidth, -holeHalfHeight);
-        hole.lineTo(holeHalfWidth, holeHalfHeight);
-        hole.lineTo(-holeHalfWidth, holeHalfHeight);
-        hole.lineTo(-holeHalfWidth, -holeHalfHeight);
-        shape.holes.push(hole);
-
-        const groundOverlayGeom = new THREE.ShapeGeometry(shape);
-        const groundOverlayMat = new THREE.MeshBasicMaterial({
-            color: overlayColor,
-            transparent: true,
-            opacity: overlayOpacity,
-            side: THREE.DoubleSide,
-            depthWrite: false
-        });
-
-        const groundOverlay = new THREE.Mesh(groundOverlayGeom, groundOverlayMat);
-        groundOverlay.rotation.x = -Math.PI / 2;
-        groundOverlay.position.set(centerX, 0.3, centerZ);
-        this.scene.add(groundOverlay);
-
-        // 画面全体をカバーする非常に大きなオーバーレイ（背景の三角形部分もカバー）
-        const bgOverlaySize = 10000; // 非常に大きなサイズ
-        const bgShape = new THREE.Shape();
-        bgShape.moveTo(-bgOverlaySize / 2, -bgOverlaySize / 2);
-        bgShape.lineTo(bgOverlaySize / 2, -bgOverlaySize / 2);
-        bgShape.lineTo(bgOverlaySize / 2, bgOverlaySize / 2);
-        bgShape.lineTo(-bgOverlaySize / 2, bgOverlaySize / 2);
-        bgShape.lineTo(-bgOverlaySize / 2, -bgOverlaySize / 2);
-
-        // 中央に穴（地面全体を含むエリア）
-        const bgHole = new THREE.Path();
-        const bgHoleHalfWidth = gridWidth * 1.3 / 2; // 地面のサイズ（1.2倍）より少し大きめ
-        const bgHoleHalfHeight = gridHeight * 1.3 / 2;
-        bgHole.moveTo(-bgHoleHalfWidth, -bgHoleHalfHeight);
-        bgHole.lineTo(bgHoleHalfWidth, -bgHoleHalfHeight);
-        bgHole.lineTo(bgHoleHalfWidth, bgHoleHalfHeight);
-        bgHole.lineTo(-bgHoleHalfWidth, bgHoleHalfHeight);
-        bgHole.lineTo(-bgHoleHalfWidth, -bgHoleHalfHeight);
-        bgShape.holes.push(bgHole);
-
-        const bgOverlayGeom = new THREE.ShapeGeometry(bgShape);
-        const bgOverlayMat = new THREE.MeshBasicMaterial({
-            color: overlayColor,
-            transparent: true,
-            opacity: overlayOpacity,
-            side: THREE.DoubleSide,
-            depthWrite: false
-        });
-
-        const bgOverlay = new THREE.Mesh(bgOverlayGeom, bgOverlayMat);
-        bgOverlay.rotation.x = -Math.PI / 2;
-        bgOverlay.position.set(centerX, 0.2, centerZ);
-        this.scene.add(bgOverlay);
     }
 
     /**
