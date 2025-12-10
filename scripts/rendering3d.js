@@ -83,14 +83,17 @@ export class RenderingEngine3D {
         // テクスチャをロード
         const textureLoader = new THREE.TextureLoader();
         const groundTexture = textureLoader.load('./assets/textures/ground_sekigahara.jpg');
+        const heightMap = textureLoader.load('./assets/textures/height_sekigahara.jpg'); // 専用の高さマップ
 
         // テクスチャを繰り返さない（史実の地形マップとして使用）
         groundTexture.wrapS = THREE.ClampToEdgeWrapping;
         groundTexture.wrapT = THREE.ClampToEdgeWrapping;
-        // repeat設定は不要（繰り返さないため）
+        heightMap.wrapS = THREE.ClampToEdgeWrapping;
+        heightMap.wrapT = THREE.ClampToEdgeWrapping;
 
         // テクスチャのフィルタリング設定（よりきれいに表示）
         groundTexture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+        heightMap.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
 
         // 地面（セグメント数を減らしてパフォーマンス改善）
         const groundGeometry = new THREE.PlaneGeometry(
@@ -102,8 +105,8 @@ export class RenderingEngine3D {
 
         const groundMaterial = new THREE.MeshStandardMaterial({
             map: groundTexture,  // カラーテクスチャ
-            displacementMap: groundTexture,  // 高さマップ（同じテクスチャを使用）
-            displacementScale: 60,  // 高さのスケール（控えめに調整）
+            displacementMap: heightMap,  // 専用の高さマップを使用
+            displacementScale: 80,  // 高さのスケール（グレースケールに合わせて調整）
             roughness: 0.8,
             metalness: 0.2
         });
