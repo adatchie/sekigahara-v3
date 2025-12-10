@@ -168,6 +168,40 @@ export class RenderingEngine3D {
         groundOverlay.rotation.x = -Math.PI / 2;
         groundOverlay.position.set(centerX, 0.3, centerZ);
         this.scene.add(groundOverlay);
+
+        // 画面全体をカバーする非常に大きなオーバーレイ（背景の三角形部分もカバー）
+        const bgOverlaySize = 10000; // 非常に大きなサイズ
+        const bgShape = new THREE.Shape();
+        bgShape.moveTo(-bgOverlaySize / 2, -bgOverlaySize / 2);
+        bgShape.lineTo(bgOverlaySize / 2, -bgOverlaySize / 2);
+        bgShape.lineTo(bgOverlaySize / 2, bgOverlaySize / 2);
+        bgShape.lineTo(-bgOverlaySize / 2, bgOverlaySize / 2);
+        bgShape.lineTo(-bgOverlaySize / 2, -bgOverlaySize / 2);
+
+        // 中央に穴（地面全体を含むエリア）
+        const bgHole = new THREE.Path();
+        const bgHoleHalfWidth = gridWidth * 0.65;
+        const bgHoleHalfHeight = gridHeight * 0.65;
+        bgHole.moveTo(-bgHoleHalfWidth, -bgHoleHalfHeight);
+        bgHole.lineTo(bgHoleHalfWidth, -bgHoleHalfHeight);
+        bgHole.lineTo(bgHoleHalfWidth, bgHoleHalfHeight);
+        bgHole.lineTo(-bgHoleHalfWidth, bgHoleHalfHeight);
+        bgHole.lineTo(-bgHoleHalfWidth, -bgHoleHalfHeight);
+        bgShape.holes.push(bgHole);
+
+        const bgOverlayGeom = new THREE.ShapeGeometry(bgShape);
+        const bgOverlayMat = new THREE.MeshBasicMaterial({
+            color: overlayColor,
+            transparent: true,
+            opacity: overlayOpacity,
+            side: THREE.DoubleSide,
+            depthWrite: false
+        });
+
+        const bgOverlay = new THREE.Mesh(bgOverlayGeom, bgOverlayMat);
+        bgOverlay.rotation.x = -Math.PI / 2;
+        bgOverlay.position.set(centerX, 0.2, centerZ);
+        this.scene.add(bgOverlay);
     }
 
     /**
