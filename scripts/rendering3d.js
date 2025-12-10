@@ -103,7 +103,7 @@ export class RenderingEngine3D {
         const groundMaterial = new THREE.MeshStandardMaterial({
             map: groundTexture,  // カラーテクスチャ
             displacementMap: groundTexture,  // 高さマップ（同じテクスチャを使用）
-            displacementScale: 100,  // 高さのスケール（極端に調整）
+            displacementScale: 60,  // 高さのスケール（控えめに調整）
             roughness: 0.8,
             metalness: 0.2
         });
@@ -207,7 +207,7 @@ export class RenderingEngine3D {
 
             const intersects = raycaster.intersectObject(this.groundMesh);
             if (intersects.length > 0) {
-                hexHeight = intersects[0].point.y + 2; // 地形の高さ + 余白
+                hexHeight = intersects[0].point.y + 5; // 地形の高さ + 十分な余白
             }
         }
 
