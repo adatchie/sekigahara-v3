@@ -120,20 +120,54 @@ export class RenderingEngine3D {
         // グリッド外なら暗いヘックス形状のオーバーレイを配置
 
         const overlayColor = 0x000000; // 黒
-        const overlayOpacity = 0.6; // 透明度
+        const overlayOpacity = 0.25; // 透明度（さらに薄く）
 
         // より広い範囲をチェック（グリッドより大きい範囲）
-        const checkRangeQ = MAP_W + 10;
-        const checkRangeR = MAP_H + 10;
+        const checkRangeQ = MAP_W + 20; // 外側も広くカバー
+        const checkRangeR = MAP_H + 20;
 
-        for (let r = -5; r < checkRangeR; r++) {
-            for (let q = -5; q < checkRangeQ; q++) {
+        for (let r = -10; r < checkRangeR; r++) {
+            for (let q = -10; q < checkRangeQ; q++) {
                 // グリッド範囲外のヘックスにオーバーレイを配置
                 if (q < 0 || q >= MAP_W || r < 0 || r >= MAP_H) {
                     this.addHexOverlay(q, r, overlayColor, overlayOpacity);
                 }
             }
         }
+
+        // 地面全体にも大きなオーバーレイを追加（三角形の緑部分もカバー）
+        const groundOverlaySize = Math.max(gridWidth, gridHeight) * 2;
+        const shape = new THREE.Shape();
+        shape.moveTo(-groundOverlaySize / 2, -groundOverlaySize / 2);
+        shape.lineTo(groundOverlaySize / 2, -groundOverlaySize / 2);
+        shape.lineTo(groundOverlaySize / 2, groundOverlaySize / 2);
+        shape.lineTo(-groundOverlaySize / 2, groundOverlaySize / 2);
+        shape.lineTo(-groundOverlaySize / 2, -groundOverlaySize / 2);
+
+        // 中央に穴（ヘックスグリッドエリア）
+        const hole = new THREE.Path();
+        const holeHalfWidth = gridWidth * 0.6;
+        const holeHalfHeight = gridHeight * 0.6;
+        hole.moveTo(-holeHalfWidth, -holeHalfHeight);
+        hole.lineTo(holeHalfWidth, -holeHalfHeight);
+        hole.lineTo(holeHalfWidth, holeHalfHeight);
+        hole.lineTo(-holeHalfWidth, holeHalfHeight);
+        hole.lineTo(-holeHalfWidth, -holeHalfHeight);
+        shape.holes.push(hole);
+
+        const groundOverlayGeom = new THREE.ShapeGeometry(shape);
+        const groundOverlayMat = new THREE.MeshBasicMaterial({
+            color: overlayColor,
+            transparent: true,
+            opacity: overlayOpacity,
+            side: THREE.DoubleSide,
+            depthWrite: false
+        });
+
+        const groundOverlay = new THREE.Mesh(groundOverlayGeom, groundOverlayMat);
+        groundOverlay.rotation.x = -Math.PI / 2;
+        groundOverlay.position.set(centerX, 0.3, centerZ);
+        this.scene.add(groundOverlay);
     }
 
     /**
