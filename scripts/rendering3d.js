@@ -216,7 +216,7 @@ export class RenderingEngine3D {
 
                 const intersects = raycaster.intersectObject(this.groundMesh);
                 if (intersects.length > 0) {
-                    y = intersects[0].point.y + 2; // 地形の高さ + 少しの余白
+                    y = intersects[0].point.y + 30; // 地形の高さ + 十分な余白
                 }
             }
 
