@@ -127,8 +127,7 @@ export class RenderingEngine3D {
         // ヘックスグリッドを地形に沿った平面として描画（DisplacementMap使用）
         this.createHexGridOverlay(gridWidth, gridHeight, centerX, centerZ, heightMap);
 
-        // 全ユニットを表示
-        this.drawUnits();
+        // ユニットはstartGame()後に描画される
     }
 
     /**

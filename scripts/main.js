@@ -88,6 +88,9 @@ export class Game {
         console.log(`Total units created: ${this.units.length}`);
         console.log(`Warlords: ${WARLORDS.length}`);
 
+        // gameStateをwindowに公開（3Dレンダリング用）
+        window.gameState = { units: this.units };
+
         // 調略フラグを初期化（武将単位で管理）
         this.warlordPlotUsed = {}; // warlordId -> boolean
 
@@ -101,6 +104,11 @@ export class Game {
 
         this.gameState = 'ORDER';
         this.updateHUD();
+
+        // 3Dユニットを描画
+        if (this.renderingEngine && this.renderingEngine.drawUnits) {
+            this.renderingEngine.drawUnits();
+        }
     }
 
     async commitTurn() {
