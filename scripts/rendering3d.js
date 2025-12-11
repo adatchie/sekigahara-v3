@@ -240,19 +240,21 @@ export class RenderingEngine3D {
         );
 
         // 透明なマテリアルにグリッドテクスチャとDisplacementMapを適用
-        const gridMaterial = new THREE.MeshBasicMaterial({
+        const gridMaterial = new THREE.MeshStandardMaterial({
             map: gridTexture,
             transparent: true,
             opacity: 1.0,
             displacementMap: heightMap,
             displacementScale: 80,
+            roughness: 1.0,
+            metalness: 0.0,
             side: THREE.DoubleSide,
             depthWrite: false
         });
 
         const gridOverlay = new THREE.Mesh(gridGeometry, gridMaterial);
         gridOverlay.rotation.x = -Math.PI / 2;
-        gridOverlay.position.set(centerX, 0.5, centerZ); // 地形より少し上
+        gridOverlay.position.set(centerX, 5, centerZ); // 地形より十分上に
         gridOverlay.renderOrder = 1; // 地形の後に描画
         this.scene.add(gridOverlay);
     }
