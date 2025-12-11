@@ -313,7 +313,7 @@ export class RenderingEngine3D {
         unit.rotation.z = facing * (Math.PI / 3);
 
         // 位置：地形の高さ + 固定オフセット
-        const heightOffset = 50; // 地形の上
+        const heightOffset = 40; // 地形の上
         unit.position.set(pos.x, heightOffset, pos.z);
 
         unit.castShadow = true;
