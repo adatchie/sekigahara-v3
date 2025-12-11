@@ -5,7 +5,7 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { HEX_SIZE, MAP_W, MAP_H } from './constants.js';
+import { HEX_SIZE, MAP_W, MAP_H, WARLORDS } from './constants.js';
 
 export class RenderingEngine3D {
     constructor(canvas) {
@@ -270,7 +270,7 @@ export class RenderingEngine3D {
         window.gameState.units.forEach(unit => {
             if (unit.q !== undefined && unit.r !== undefined && !unit.dead) {
                 // 大名の色を取得
-                const warlord = window.WARLORDS[unit.warlordId];
+                const warlord = WARLORDS[unit.warlordId];
                 const color = warlord ? parseInt(warlord.color.replace('#', '0x')) : 0xff0000;
 
                 this.createUnit(unit.q, unit.r, unit.facing || 0, color);
