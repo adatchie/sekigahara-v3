@@ -124,8 +124,8 @@ export class RenderingEngine3D {
         // グリッド外のエリアを暗くするオーバーレイ（プレイエリアを明確化）
         this.createOutOfBoundsOverlay(gridWidth, gridHeight, centerX, centerZ);
 
-        // ヘックスグリッドの描画
-        this.drawHexGrid();
+        // ヘックスグリッドを地形に沿った平面として描画（DisplacementMap使用）
+        this.createHexGridOverlay(gridWidth, gridHeight, centerX, centerZ, heightMap);
     }
 
     /**
@@ -184,6 +184,80 @@ export class RenderingEngine3D {
     }
 
     /**
+     * HEXグリッドを地形に沿った平面オーバーレイとして作成
+     */
+    createHexGridOverlay(gridWidth, gridHeight, centerX, centerZ, heightMap) {
+        // Canvasでヘックスグリッドを描画
+        const canvas = document.createElement('canvas');
+        const size = 2048; // テクスチャサイズ
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+
+        // 背景を透明に
+        ctx.clearRect(0, 0, size, size);
+
+        // グリッドを描画
+        ctx.strokeStyle = 'rgba(136, 170, 136, 0.5)'; // 半透明の緑
+        ctx.lineWidth = 2;
+
+        const scaleX = size / (gridWidth * 1.2);
+        const scaleZ = size / (gridHeight * 1.2);
+        const offsetX = (size - gridWidth * scaleX) / 2;
+        const offsetZ = (size - gridHeight * scaleZ) / 2;
+
+        for (let r = 0; r < MAP_H; r++) {
+            for (let q = 0; q < MAP_W; q++) {
+                const center = this.hexToWorld3D(q, r);
+
+                ctx.beginPath();
+                for (let i = 0; i <= 6; i++) {
+                    const angle = (Math.PI / 3) * i + Math.PI / 6;
+                    const x = (center.x + HEX_SIZE * Math.cos(angle)) * scaleX + offsetX;
+                    const z = (center.z + HEX_SIZE * Math.sin(angle)) * scaleZ + offsetZ;
+
+                    if (i === 0) {
+                        ctx.moveTo(x, z);
+                    } else {
+                        ctx.lineTo(x, z);
+                    }
+                }
+                ctx.stroke();
+            }
+        }
+
+        // Canvasをテクスチャに変換
+        const gridTexture = new THREE.CanvasTexture(canvas);
+        gridTexture.wrapS = THREE.ClampToEdgeWrapping;
+        gridTexture.wrapT = THREE.ClampToEdgeWrapping;
+
+        // 地形と同じジオメトリを使用
+        const gridGeometry = new THREE.PlaneGeometry(
+            gridWidth * 1.2,
+            gridHeight * 1.2,
+            128,
+            128
+        );
+
+        // 透明なマテリアルにグリッドテクスチャとDisplacementMapを適用
+        const gridMaterial = new THREE.MeshBasicMaterial({
+            map: gridTexture,
+            transparent: true,
+            opacity: 1.0,
+            displacementMap: heightMap,
+            displacementScale: 80,
+            side: THREE.DoubleSide,
+            depthWrite: false
+        });
+
+        const gridOverlay = new THREE.Mesh(gridGeometry, gridMaterial);
+        gridOverlay.rotation.x = -Math.PI / 2;
+        gridOverlay.position.set(centerX, 0.5, centerZ); // 地形より少し上
+        gridOverlay.renderOrder = 1; // 地形の後に描画
+        this.scene.add(gridOverlay);
+    }
+
+    /**
      * ヘックス座標を3D空間のXZ座標に変換
      */
     hexToWorld3D(q, r) {
@@ -206,8 +280,10 @@ export class RenderingEngine3D {
             const z = center.z + HEX_SIZE * Math.sin(angle);
 
             // この頂点位置の地形の高さを取得
-            let y = 5; // デフォルトの高さ
+            // TODO: Raycastが正しく動作していないため、一時的に固定の高さを使用
+            let y = 150; // 固定の高さ
 
+            /*
             if (this.groundMesh) {
                 const raycaster = new THREE.Raycaster();
                 const rayOrigin = new THREE.Vector3(x, 200, z);
@@ -219,6 +295,7 @@ export class RenderingEngine3D {
                     y = intersects[0].point.y + 30; // 地形の高さ + 十分な余白
                 }
             }
+            */
 
             vertices.push(new THREE.Vector3(x, y, z));
         }
