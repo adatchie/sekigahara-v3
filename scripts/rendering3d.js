@@ -204,31 +204,6 @@ export class RenderingEngine3D {
         ctx.lineWidth = 2;
 
         const scaleX = size / (gridWidth * 1.2);
-        const scaleZ = size / (gridHeight * 1.2);
-        const offsetX = (size - gridWidth * scaleX) / 2;
-        const offsetZ = (size - gridHeight * scaleZ) / 2;
-
-        for (let r = 0; r < MAP_H; r++) {
-            for (let q = 0; q < MAP_W; q++) {
-                const center = this.hexToWorld3D(q, r);
-
-                ctx.beginPath();
-                for (let i = 0; i <= 6; i++) {
-                    const angle = (Math.PI / 3) * i + Math.PI / 6;
-                    const x = (center.x + HEX_SIZE * Math.cos(angle)) * scaleX + offsetX;
-                    const z = (center.z + HEX_SIZE * Math.sin(angle)) * scaleZ + offsetZ;
-
-                    if (i === 0) {
-                        ctx.moveTo(x, z);
-                    } else {
-                        ctx.lineTo(x, z);
-                    }
-                }
-                ctx.stroke();
-            }
-        }
-
-        // Canvasをテクスチャに変換
         const gridTexture = new THREE.CanvasTexture(canvas);
         gridTexture.wrapS = THREE.ClampToEdgeWrapping;
         gridTexture.wrapT = THREE.ClampToEdgeWrapping;
@@ -314,31 +289,6 @@ export class RenderingEngine3D {
         // 地面に寝かせる（X軸回転）
         unit.rotation.x = -Math.PI / 2;
 
-        // facing方向を向く（Z軸回転、地面に寝た状態で）
-        // facing 0 = 北（Z軸負方向）、1 = 北東、2 = 南東、3 = 南、4 = 南西、5 = 北西
-        unit.rotation.z = facing * (Math.PI / 3);
-
-        // 位置：地形の高さ + 固定オフセット
-        let y = 40; // デフォルト高さ
-
-        // Raycastで地形の高さを取得
-        if (this.groundMesh) {
-            const raycaster = new THREE.Raycaster();
-            const rayOrigin = new THREE.Vector3(pos.x, 500, pos.z); // 上空から
-            const rayDirection = new THREE.Vector3(0, -1, 0); // 真下へ
-            raycaster.set(rayOrigin, rayDirection);
-
-            const intersects = raycaster.intersectObject(this.groundMesh);
-            if (intersects.length > 0) {
-                // 地形の高さ + ユニットの浮遊高さ
-                // displacementMapの影響で見た目の高さと異なる場合があるため調整が必要かもしれない
-                y = intersects[0].point.y + 10;
-            }
-        }
-
-        unit.position.set(pos.x, y, pos.z);
-
-        unit.castShadow = true;
         unit.receiveShadow = true;
 
         this.scene.add(unit);
