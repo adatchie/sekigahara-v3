@@ -346,7 +346,8 @@ export class RenderingEngine3D {
         // facing定義 (unit-manager.js準拠): 0=東, 1=南東, 2=南西, 3=西, 4=北西, 5=北東
         // rotation.z=0で北を向いているため、補正が必要
         // 0(東) -> -90度
-        unit.rotation.z = -Math.PI / 2 - facing * (Math.PI / 3);
+        // さらに180度回転させて凸の向きを合わせる（ユーザー指摘対応）
+        unit.rotation.z = -Math.PI / 2 - facing * (Math.PI / 3) + Math.PI;
 
         // 位置：地形の高さ + 固定オフセット
         let y = 100; // デフォルト高さ
