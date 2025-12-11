@@ -270,8 +270,14 @@ export class RenderingEngine3D {
         window.gameState.units.forEach(unit => {
             if (unit.q !== undefined && unit.r !== undefined && !unit.dead) {
                 // 大名の色を取得
-                const warlord = WARLORDS[unit.warlordId];
-                const color = warlord ? parseInt(warlord.color.replace('#', '0x')) : 0xff0000;
+                let color = 0xff0000; // デフォルト赤
+
+                if (unit.warlordId !== undefined && WARLORDS[unit.warlordId]) {
+                    const warlord = WARLORDS[unit.warlordId];
+                    if (warlord.color) {
+                        color = parseInt(warlord.color.replace('#', '0x'));
+                    }
+                }
 
                 this.createUnit(unit.q, unit.r, unit.facing || 0, color);
             }
