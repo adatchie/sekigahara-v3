@@ -126,6 +126,9 @@ export class RenderingEngine3D {
 
         // ヘックスグリッドを地形に沿った平面として描画（DisplacementMap使用）
         this.createHexGridOverlay(gridWidth, gridHeight, centerX, centerZ, heightMap);
+
+        // テスト用：1つのユニットを配置
+        this.createTestUnit(5, 5, 0, 0xff0000); // (5,5)に赤い凸型ユニット、向き=0
     }
 
     /**
@@ -257,6 +260,56 @@ export class RenderingEngine3D {
         gridOverlay.position.set(centerX, 5, centerZ); // 地形より十分上に
         gridOverlay.renderOrder = 1; // 地形の後に描画
         this.scene.add(gridOverlay);
+    }
+
+    /**
+     * テスト用：凸型ユニットを1つ配置
+     */
+    createTestUnit(q, r, facing, color) {
+        // ヘックス位置を3D座標に変換
+        const pos = this.hexToWorld3D(q, r);
+
+        // 凸型（矢印型）の形状を作成
+        const shape = new THREE.Shape();
+        const size = HEX_SIZE * 0.6; // ユニットサイズ
+
+        // 凸型の頂点を定義（上向きの矢印）
+        shape.moveTo(0, size * 0.5);           // 上の尖った部分
+        shape.lineTo(size * 0.4, size * 0.2);  // 右上
+        shape.lineTo(size * 0.4, -size * 0.5); // 右下
+        shape.lineTo(-size * 0.4, -size * 0.5);// 左下
+        shape.lineTo(-size * 0.4, size * 0.2); // 左上
+        shape.lineTo(0, size * 0.5);           // 上に戻る
+
+        // ExtrudeGeometryで立体化
+        const extrudeSettings = {
+            depth: HEX_SIZE * 0.3,  // 厚み
+            bevelEnabled: false
+        };
+
+        const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+
+        // マテリアル
+        const material = new THREE.MeshStandardMaterial({
+            color: color,
+            roughness: 0.7,
+            metalness: 0.3
+        });
+
+        const unit = new THREE.Mesh(geometry, material);
+
+        // 回転：facingに応じて向きを変える（0=上、1=右上、2=右下、3=下、4=左下、5=左上）
+        const rotationY = (facing * Math.PI / 3);
+        unit.rotation.y = rotationY;
+
+        // 位置：地形の高さ + 固定オフセット
+        const heightOffset = 50; // 固定の高さ（地形の上）
+        unit.position.set(pos.x, heightOffset, pos.z);
+
+        unit.castShadow = true;
+        unit.receiveShadow = true;
+
+        this.scene.add(unit);
     }
 
     /**
