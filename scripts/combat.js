@@ -7,7 +7,7 @@ import { getDist, getDistRaw, getFacingAngle, findPath } from './pathfinding.js'
 import { hexToPixel } from './pathfinding.js';
 import { DIALOGUE } from './constants.js';
 import { generatePortrait } from './rendering.js';
-import { getFormationModifiers, canMoveWithFormation, checkForcedFormationChange, FORMATION_INFO } from './formation.js';
+import { getFormationModifiers, canMoveWithFormation, checkForcedFormationChange, FORMATION_INFO, calculateFormationTargets } from './formation.js?v=2';
 import { UNIT_TYPE_HEADQUARTERS } from './constants.js';
 
 export class CombatSystem {
@@ -83,6 +83,9 @@ export class CombatSystem {
         const dist = getDist(unit, target);
         console.log(`[processPlot] ${unit.name} -> ${target.name}, dist=${dist}`);
 
+        // 調略射程(5) + 陣形解除距離(3)
+        const engagementDist = 8.0;
+
         if (dist <= 5) {
             unit.dir = getFacingAngle(unit.q, unit.r, target.q, target.r);
             this.speak(unit, 'PLOT_DO');
@@ -145,12 +148,34 @@ export class CombatSystem {
 
             unit.order = null;
             await this.wait(800);
+        } else if (dist > engagementDist) {
+            // まだ遠い場合は陣形を維持して移動
+            console.log(`[processPlot] Target too far (${dist}), moving in formation.`);
+
+            const originalOrder = unit.order;
+            unit.order = {
+                type: 'MOVE',
+                targetHex: { q: target.q, r: target.r },
+                originalTargetId: target.id
+            };
+
+            await this.processMove(unit, allUnits);
+
+            // 命令復帰
+            if (unit.order === null && getDist(unit, target) > 5) {
+                unit.order = originalOrder;
+            } else {
+                unit.order = originalOrder;
+            }
         } else {
-            console.log(`[processPlot] Target too far, moving instead.`);
+            console.log(`[processPlot] Moving to plot range.`);
             await this.moveUnitStep(unit, target, allUnits);
         }
     }
 
+    /**
+     * 攻撃を処理
+     */
     /**
      * 攻撃を処理
      */
@@ -160,11 +185,42 @@ export class CombatSystem {
         const dist = getDist(unit, target);
         console.log(`[processAttack] ${unit.name} -> ${target.name}, dist=${dist}, reach=${reach}`);
 
+        // 接敵するまでは陣形で近づく
+        // reach + 3.0 くらいまでは陣形で整然と近づき、そこから個別に襲いかかるイメージ
+        const engagementDist = reach + 3.0;
+
         if (dist <= reach + 1.0) {
+            // 攻撃射程内なら攻撃実行
             unit.dir = getFacingAngle(unit.q, unit.r, target.q, target.r);
             this.speak(unit, 'ATTACK');
             await this.combat(unit, target, allUnits, map);
+        } else if (dist > engagementDist) {
+            // まだ遠い場合は陣形を維持して移動
+            // 一時的にMOVE命令のフリをしてprocessMoveを呼ぶ（ただしターゲットは維持）
+            // processMoveは内部で陣形位置を計算して移動する
+
+            // 重要: processMoveは unit.order.targetHex を参照するので、一時的にセットする
+            const originalOrder = unit.order;
+            unit.order = {
+                type: 'MOVE',
+                targetHex: { q: target.q, r: target.r },
+                // 元のターゲット情報を保持して、陣形計算時の本陣の向き決定などに使う
+                originalTargetId: target.id
+            };
+
+            await this.processMove(unit, allUnits);
+
+            // 命令を元に戻す（次ターンも攻撃を継続するため）
+            // processMove内で目的地に着くとorderがnullになることがあるので注意
+            if (unit.order === null && getDist(unit, target) > reach + 1.0) {
+                // まだ届いていないのにMove完了扱いでnullになった場合、攻撃命令を復帰させる
+                unit.order = originalOrder;
+            } else {
+                // まだ移動中なら、次のターンも攻撃命令として処理したいので復帰
+                unit.order = originalOrder;
+            }
         } else {
+            // 接敵距離に入ったら、個別にターゲットへ殺到する
             const moved = await this.moveUnitStep(unit, target, allUnits);
             // 移動後に再チェック
             const newDist = getDist(unit, target);
@@ -183,7 +239,41 @@ export class CombatSystem {
     async processMove(unit, allUnits) {
         console.log(`[processMove] START: ${unit.name}, unitType=${unit.unitType}, formation=${unit.formation}`);
 
-        const dest = unit.order.targetHex;
+        let dest = unit.order.targetHex;
+
+        // ---------------------------------------------------------
+        // 陣形移動ロジック (配下ユニットの場合)
+        // ---------------------------------------------------------
+        if (unit.unitType !== UNIT_TYPE_HEADQUARTERS) {
+            // 本陣を探す
+            const hq = allUnits.find(u => u.warlordId === unit.warlordId && u.unitType === UNIT_TYPE_HEADQUARTERS && !u.dead);
+
+            if (hq && hq.formation) {
+                // 配下ユニットリストを取得（自分を含む、ID順でソートして一貫性を保つ）
+                const subordinates = allUnits
+                    .filter(u => u.warlordId === unit.warlordId && u.unitType !== UNIT_TYPE_HEADQUARTERS && !u.dead)
+                    .sort((a, b) => a.id - b.id);
+
+                // 本陣の向きを決定（移動中なら移動方向、そうでなければ現在の向き）
+                let baseDir = hq.dir;
+                if (hq.order && hq.order.targetHex) {
+                    // 移動目標がある場合はそちらを向く
+                    baseDir = getFacingAngle(hq.q, hq.r, hq.order.targetHex.q, hq.order.targetHex.r);
+                }
+
+                // 陣形ターゲットを計算（本陣の現在位置を基準）
+                const targets = calculateFormationTargets({ ...hq, dir: baseDir }, subordinates);
+
+                if (targets && targets.has(unit.id)) {
+                    const formDest = targets.get(unit.id);
+                    // 簡易的に、ターゲットが敵ユニットでない（単なる移動）なら陣形位置を優先
+                    if (dest.id === undefined) {
+                        dest = formDest;
+                    }
+                }
+            }
+        }
+        // ---------------------------------------------------------
         if (getDistRaw(unit.q, unit.r, dest.q, dest.r) === 0) {
             unit.order = null;
         } else {
@@ -241,7 +331,32 @@ export class CombatSystem {
                 getDistRaw(next.q, next.r, u.q, u.r) < (unit.radius + u.radius)
             );
 
-            if (blocker) return actuallyMoved;
+            if (blocker) {
+                // 味方ユニットなら位置交換（Swap）を行う
+                if (blocker.side === unit.side) {
+                    console.log(`🔄 位置交換 (Swap): ${unit.name} <-> ${blocker.name}`);
+
+                    // blockerをunitの元いた位置に移動させる
+                    blocker.q = unit.q;
+                    blocker.r = unit.r;
+                    blocker.pos = hexToPixel(blocker.q, blocker.r);
+                    // blockerの向きも反転させておく（すれ違った感が出る）
+                    // blocker.dir = (unit.dir + 3) % 6; 
+
+                    // unitは予定通りnextへ進む
+                    unit.dir = getFacingAngle(unit.q, unit.r, next.q, next.r);
+                    unit.q = next.q;
+                    unit.r = next.r;
+                    unit.pos = hexToPixel(unit.q, unit.r);
+
+                    actuallyMoved = true;
+                    moves--; // コスト消費
+                    continue;
+                } else {
+                    // 敵なら移動不可
+                    return actuallyMoved;
+                }
+            }
 
             unit.dir = getFacingAngle(unit.q, unit.r, next.q, next.r);
             unit.q = next.q;

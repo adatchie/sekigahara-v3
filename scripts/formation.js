@@ -16,7 +16,21 @@ export const FORMATION_INFO = {
         description: '攻撃+20 / 防御-20\n先陣を切って攻める',
         atkMod: 20,
         defMod: -20,
-        requiredSubordinates: 0  // 前方に必要な配下ユニット数
+        requiredSubordinates: 0,
+        // Dir 0 (East) Base
+        slots: [
+            { q: 1, r: 0 }, { q: 2, r: 0 }, { q: 3, r: 0 }, { q: 4, r: 0 }, { q: 5, r: 0 }, // Spine
+            { q: 1, r: -1 }, { q: 2, r: -1 }, { q: 3, r: -1 }, // Left Inner
+            { q: 0, r: 1 }, { q: 1, r: 1 }, { q: 2, r: 1 }, // Right Inner
+            { q: 1, r: -2 }, { q: 2, r: -2 }, // Left Outer
+            { q: -1, r: 2 }, { q: 0, r: 2 }, // Right Outer
+            { q: 1, r: -3 }, { q: -2, r: 3 }, // Tips
+            { q: 0, r: -1 }, { q: 0, r: -2 }, // Base Left
+            { q: -1, r: 1 }, { q: -1, r: 0 }, { q: -1, r: -1 }, // Back
+            { q: -2, r: 1 }, { q: -2, r: 2 }, { q: -2, r: 0 }, // Back Wide
+            { q: -3, r: 0 }, { q: -3, r: 1 }, { q: -3, r: 2 }, // Back Far
+            { q: -2, r: -1 }, { q: -2, r: -2 } // Back Fill
+        ]
     },
     [FORMATION_KAKUYOKU]: {
         name: '鶴翼の陣',
@@ -24,7 +38,24 @@ export const FORMATION_INFO = {
         description: '攻撃±0 / 防御±0\nバランス型の陣形',
         atkMod: 0,
         defMod: 0,
-        requiredSubordinates: 1
+        requiredSubordinates: 1,
+        // V-shape opening to East
+        slots: [
+            // Left Wing (NE)
+            { q: 0, r: -1 }, { q: 1, r: -2 }, { q: 2, r: -3 }, { q: 3, r: -4 }, { q: 4, r: -5 }, { q: 5, r: -6 },
+            // Right Wing (SE)
+            { q: 0, r: 1 }, { q: 1, r: 2 }, { q: 2, r: 3 }, { q: 3, r: 4 }, { q: 4, r: 5 }, { q: 5, r: 6 },
+            // Inner Left & Right
+            { q: 1, r: -3 }, { q: 2, r: -4 }, { q: 3, r: -5 },
+            { q: 1, r: 3 }, { q: 2, r: 4 }, { q: 3, r: 5 },
+            // Body
+            { q: -1, r: -1 }, { q: -1, r: -2 }, { q: -2, r: -1 },
+            { q: -1, r: 2 }, { q: -2, r: 2 }, { q: -2, r: 1 },
+            // Center Guard
+            { q: -1, r: 0 }, { q: -2, r: 0 }, { q: -3, r: 0 },
+            // Rear Extensions
+            { q: -3, r: -1 }, { q: -3, r: 1 }, { q: -4, r: 0 }
+        ]
     },
     [FORMATION_GYORIN]: {
         name: '魚鱗の陣',
@@ -32,7 +63,18 @@ export const FORMATION_INFO = {
         description: '攻撃-20 / 防御+20\n本陣を守る堅陣',
         atkMod: -20,
         defMod: 20,
-        requiredSubordinates: 2
+        requiredSubordinates: 2,
+        // Cluster around HQ
+        slots: [
+            // Ring 1
+            { q: 1, r: 0 }, { q: 0, r: 1 }, { q: -1, r: 1 }, { q: -1, r: 0 }, { q: 0, r: -1 }, { q: 1, r: -1 },
+            // Ring 2
+            { q: 2, r: 0 }, { q: 1, r: 1 }, { q: 0, r: 2 }, { q: -1, r: 2 }, { q: -2, r: 2 }, { q: -2, r: 1 },
+            { q: -2, r: 0 }, { q: -1, r: -1 }, { q: 0, r: -2 }, { q: 1, r: -2 }, { q: 2, r: -2 }, { q: 2, r: -1 },
+            // Ring 3 (Front Heavy)
+            { q: 3, r: 0 }, { q: 2, r: 1 }, { q: 1, r: 2 }, { q: 0, r: 3 }, { q: 3, r: -1 }, { q: 2, r: -3 },
+            { q: -3, r: 0 }, { q: -3, r: 3 }, { q: -3, r: -3 }, { q: -1, r: 3 }, { q: -1, r: -3 }, { q: 1, r: -3 }
+        ]
     }
 };
 
@@ -45,6 +87,60 @@ export function getFormationModifiers(formation) {
     }
     const info = FORMATION_INFO[formation];
     return { atk: info.atkMod, def: info.defMod };
+}
+
+/**
+ * 座標を回転させる (Hex Grid Rotation)
+ * @param {number} q 
+ * @param {number} r 
+ * @param {number} rotation 0-5 (60 degree steps clockwise)
+ */
+function rotateHex(q, r, rotation) {
+    let nq = q;
+    let nr = r;
+    for (let i = 0; i < rotation; i++) {
+        // Clockwise rotation: (q, r) -> (-r, q+r)
+        const temp = nq;
+        nq = -nr;
+        nr = temp + nr;
+    }
+    return { q: nq, r: nr };
+}
+
+/**
+ * 本陣と配下ユニットの陣形目標座標を計算
+ * @param {Object} hq 本陣ユニット
+ * @param {Array} subordinates 配下ユニットのリスト
+ */
+export function calculateFormationTargets(hq, subordinates) {
+    const info = FORMATION_INFO[hq.formation];
+    if (!info || !info.slots) return null;
+
+    const targets = new Map(); // unitId -> {q, r}
+    const dir = hq.dir !== undefined ? hq.dir : 0;
+
+    // スロットを回転させて絶対座標に変換
+    const availableSlots = info.slots.map(slot => {
+        const rotated = rotateHex(slot.q, slot.r, dir);
+        return {
+            q: hq.q + rotated.q,
+            r: hq.r + rotated.r
+        };
+    });
+
+    // ユニットをスロットに割り当て
+    // 単純にリスト順、あるいは距離順などで割り当てる
+    // ここでは単純に配列の順番で割り当てる
+    for (let i = 0; i < subordinates.length; i++) {
+        if (i < availableSlots.length) {
+            targets.set(subordinates[i].id, availableSlots[i]);
+        } else {
+            // スロットが足りない場合は本陣の周囲に適当に配置（あるいは本陣と同じ位置）
+            targets.set(subordinates[i].id, { q: hq.q, r: hq.r });
+        }
+    }
+
+    return targets;
 }
 
 /**

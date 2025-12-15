@@ -1174,6 +1174,29 @@ export class RenderingEngine3D {
         window.gameState.units.forEach(unit => {
             if (unit.dead || !unit.order) return;
 
+            // フィルター: 
+            // 1. 通常移動(MOVE)の場合は本陣のみラインを表示する（配下は陣形で動くため）
+            if (unit.order.type === 'MOVE' && unit.unitType !== 'HEADQUARTERS') {
+                return;
+            }
+
+            // 2. 攻撃(ATTACK)や調略(PLOT)の場合も、接敵するまでは陣形で動くため、遠い場合は表示しない
+            if ((unit.order.type === 'ATTACK' || unit.order.type === 'PLOT') && unit.unitType !== 'HEADQUARTERS') {
+                const target = window.gameState.units.find(u => u.id === unit.order.targetId);
+                if (target) {
+                    // 簡易距離計算 (Axial distance)
+                    const dq = unit.q - target.q;
+                    const dr = unit.r - target.r;
+                    const ds = -dq - dr;
+                    const dist = Math.max(Math.abs(dq), Math.abs(dr), Math.abs(ds));
+
+                    // 接敵距離以内(およそ8HEX)でなければ表示しない
+                    if (dist > 8) {
+                        return;
+                    }
+                }
+            }
+
             const isSelected = window.game.selectedUnits && window.game.selectedUnits.some(u => u.id === unit.id);
 
             // 非選択ユニットのラインは薄く表示（オプション）
@@ -1218,7 +1241,7 @@ export class RenderingEngine3D {
                 // 矢印の先端（コーン）
                 // 向きを計算
                 const dir = new THREE.Vector3().subVectors(new THREE.Vector3(endPos.x, endPos.y, endPos.z), new THREE.Vector3(startPos.x, startPos.y, startPos.z)).normalize();
-                const arrowLength = 20;
+                // const arrowLength = 20; // unused
                 const arrowHead = new THREE.Mesh(
                     new THREE.ConeGeometry(8, 20, 8),
                     new THREE.MeshBasicMaterial({

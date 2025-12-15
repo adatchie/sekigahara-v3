@@ -206,9 +206,10 @@ export function findPath(startQ, startR, goalQ, goalR, units, movingUnit, mapSys
                 }
             }
 
-            // 味方ユニットがいる場合はコスト増（迂回を促す）
+            // 味方ユニットがいる場合はコスト増（迂回を促すが、通行は可能）
+            // 陣形維持のための位置交換（Swap）を許容するため、コストは高すぎないようにする
             if (blockInfo.blocked && blockInfo.isFriendly) {
-                moveCost += 10;
+                moveCost += 5; // コストを10から5に緩和（すれ違いやすくする）
             }
 
             // 山岳などでコストが極端に高い場合はスキップ（ただしゴールなら許容する場合もあるが、今回は山は完全不可とする）
