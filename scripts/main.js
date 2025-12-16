@@ -8,7 +8,7 @@ import { AudioEngine } from './audio.js';
 import { MapSystem } from './map.js?v=2';
 import { RenderingEngine3D } from './rendering3d.js?v=6';
 import { generatePortrait } from './rendering.js';
-import { CombatSystem } from './combat.js?v=5';
+import { CombatSystem } from './combat.js?v=6';
 import { AISystem } from './ai.js';
 import { UnitManager } from './unit-manager.js';
 import { hexToPixel, pixelToHex, isValidHex, getDistRaw } from './pathfinding.js';

@@ -277,22 +277,34 @@ export class CombatSystem {
         if (getDistRaw(unit.q, unit.r, dest.q, dest.r) === 0) {
             unit.order = null;
         } else {
-            // 本陣の場合、陣形制限をチェック
-            if (unit.unitType === UNIT_TYPE_HEADQUARTERS && unit.formation && this.unitManager) {
-                const subordinates = this.unitManager.getUnitsByWarlordId(unit.warlordId)
-                    .filter(u => !u.dead && u.unitType !== UNIT_TYPE_HEADQUARTERS);
+            // 本陣の場合、配下の追従を待つ（足並みを揃える）処理
+            if (unit.unitType === UNIT_TYPE_HEADQUARTERS && this.unitManager) {
+                // 1. 緊急回避チェック：近くに敵がいる場合はなりふり構わず動く
+                let enemyNearby = false;
+                for (const other of allUnits) {
+                    if (other.side !== unit.side && !other.dead && getDistRaw(unit.q, unit.r, other.q, other.r) <= 2) {
+                        enemyNearby = true;
+                        break;
+                    }
+                }
 
-                console.log(`[陣形チェック] ${unit.name}: 陣形=${unit.formation}, 配下=${subordinates.length}体, 目標=(${dest.q},${dest.r})`);
+                if (!enemyNearby) {
+                    const subordinates = this.unitManager.getUnitsByWarlordId(unit.warlordId)
+                        .filter(u => !u.dead && u.unitType !== UNIT_TYPE_HEADQUARTERS);
 
-                const canMove = canMoveWithFormation(unit, subordinates, dest.q, dest.r, unit.formation);
+                    if (subordinates.length > 0) {
+                        // 周囲3HEX以内にいる配下をカウント
+                        const nearbySubordinates = subordinates.filter(u => getDistRaw(unit.q, unit.r, u.q, u.r) <= 3);
+                        const ratio = nearbySubordinates.length / subordinates.length;
 
-                console.log(`[陣形チェック結果] ${unit.name}: 移動可=${canMove}`);
-
-                if (!canMove) {
-                    // 陣形要件を満たさない場合、移動をキャンセル（陣形は維持）
-                    console.log(`❌ 陣形制限により移動キャンセル: ${unit.name} (${unit.formation})`);
-                    // 移動をスキップ（その場にとどまる）
-                    return;
+                        // 配下の50%以上が近くにいないなら、移動を待機
+                        if (ratio < 0.5) {
+                            console.log(`[本陣待機] ${unit.name}: 配下到着待ち (${nearbySubordinates.length}/${subordinates.length})`);
+                            this.spawnText({ q: unit.q, r: unit.r }, "待機...", "#aaa", 40);
+                            await this.wait(200); // 少しだけウェイトを入れて雰囲気を出す
+                            return; // 移動スキップ
+                        }
+                    }
                 }
             }
 
