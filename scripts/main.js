@@ -12,7 +12,7 @@ import { CombatSystem } from './combat.js?v=5';
 import { AISystem } from './ai.js';
 import { UnitManager } from './unit-manager.js';
 import { hexToPixel, pixelToHex, isValidHex, getDistRaw } from './pathfinding.js';
-import { FORMATION_INFO, getAvailableFormations } from './formation.js?v=2';
+import { FORMATION_INFO, getAvailableFormations } from './formation.js?v=3';
 
 export class Game {
     constructor() {

@@ -215,59 +215,10 @@ function getLeftRightHexes(hexQ, hexR, dirIndex) {
  * @returns {boolean} 移動可能ならtrue
  */
 export function canMoveWithFormation(hqUnit, subordinateUnits, targetQ, targetR, formation) {
-    console.log(`[canMoveWithFormation] ${hqUnit.name}: formation=${formation}, target=(${targetQ},${targetR}), subordinates=${subordinateUnits.length}`);
-
-    if (!formation) return true; // 陣形未設定なら制限なし
-
-    const info = FORMATION_INFO[formation];
-    if (!info) return true;
-
-    const requiredCount = info.requiredSubordinates;
-    console.log(`[canMoveWithFormation] 必要配下数: ${requiredCount}`);
-
-    if (requiredCount === 0) {
-        console.log(`[canMoveWithFormation] 鋒矢なので制限なし`);
-        return true; // 鋒矢は制限なし
-    }
-
-    // 本陣から目標への経路を取得
-    const path = getLine(hqUnit.q, hqUnit.r, targetQ, targetR);
-    console.log(`[canMoveWithFormation] 経路長: ${path.length}`);
-
-    // 経路が2未満（つまり本陣と同じ位置）なら移動なしなのでOK
-    if (path.length < 2) return true;
-
-    // 各経路HEXで左右の配下ユニット数をチェック
-    for (let i = 1; i < path.length; i++) {
-        const currentHex = path[i];
-        const prevHex = path[i - 1];
-
-        // 進行方向を計算
-        const dirIndex = getDirectionIndex(prevHex.q, prevHex.r, currentHex.q, currentHex.r);
-
-        // 現在のHEXとその左右を取得
-        const { left, right } = getLeftRightHexes(currentHex.q, currentHex.r, dirIndex);
-
-        // この3つのHEXに配下ユニットが何体いるかカウント
-        const unitsInRange = subordinateUnits.filter(u =>
-            !u.dead &&
-            (
-                (u.q === currentHex.q && u.r === currentHex.r) ||
-                (u.q === left.q && u.r === left.r) ||
-                (u.q === right.q && u.r === right.r)
-            )
-        );
-
-        console.log(`[canMoveWithFormation] 経路${i}/${path.length - 1}: hex=(${currentHex.q},${currentHex.r}), 左=(${left.q},${left.r}), 右=(${right.q},${right.r}), 配下=${unitsInRange.length}/${requiredCount}`);
-
-        // 必要数に満たない場合は移動不可
-        if (unitsInRange.length < requiredCount) {
-            console.log(`[canMoveWithFormation] ❌ 移動不可: 配下不足`);
-            return false;
-        }
-    }
-
-    console.log(`[canMoveWithFormation] ✅ 移動可能`);
+    // 以前はここで厳密な陣形チェック（進行方向に配下がいるか等）を行っていたが、
+    // その条件が厳しすぎて本陣が動けなくなる（ずっと陣形を整え続ける）デッドロックが発生していた。
+    // そのため、チェックを廃止し、本陣は常に移動可能とする。
+    // 配下ユニットは自動追従ロジックで本陣を追いかけるため、結果的に陣形は維持・再構築される。
     return true;
 }
 
