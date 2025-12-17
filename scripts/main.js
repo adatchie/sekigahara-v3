@@ -14,6 +14,9 @@ import { UnitManager } from './unit-manager.js';
 import { hexToPixel, pixelToHex, isValidHex, getDistRaw } from './pathfinding.js';
 import { FORMATION_INFO, getAvailableFormations } from './formation.js?v=3';
 
+// Main Game Logic
+console.log("Main JS Version: 20 Loaded (Debug)");
+
 export class Game {
     constructor() {
         this.canvas = null;
