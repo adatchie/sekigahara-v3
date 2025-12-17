@@ -605,6 +605,8 @@ export class Game {
             }
 
             // 顔グラフィック（あれば表示）
+            console.log(`[UI] ${headquarters.name} face property:`, headquarters.face);
+
             if (headquarters.face) {
                 const faceImg = document.createElement('img');
                 faceImg.src = `portraits/${headquarters.face}`;
@@ -613,7 +615,16 @@ export class Game {
                 faceImg.style.objectFit = 'cover';
                 faceImg.style.borderRadius = '4px';
                 faceImg.style.boxShadow = '0 0 5px rgba(0,0,0,0.5)';
-                faceImg.onerror = () => { faceImg.style.display = 'none'; }; // 404なら非表示
+                faceImg.style.marginRight = '8px'; // マージン追加
+
+                faceImg.onerror = () => {
+                    console.error(`[UI] Face load failed for ${headquarters.name}: ${faceImg.src}`);
+                    faceImg.style.border = '2px solid red';
+                    faceImg.style.width = '46px'; // border分調整
+                    faceImg.style.height = '70px';
+                    faceImg.alt = '404'; // Altテキストで表示
+                };
+
                 d.appendChild(faceImg);
             }
 
