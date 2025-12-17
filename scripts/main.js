@@ -213,16 +213,31 @@ export class Game {
 
     triggerEndGame(winnerSide, loserName) {
         this.gameState = 'END';
-        this.audioEngine.playFanfare(winnerSide === this.playerSide);
+        const isPlayerWin = (winnerSide === this.playerSide);
+        this.audioEngine.playFanfare(isPlayerWin);
 
-        const winText = winnerSide === 'EAST' ? "東軍 勝利" : "西軍 勝利";
-        const msg = `敵総大将・${loserName}、討ち取ったり！`;
+        let msg = "";
+        let winText = "";
+        let color = "";
+
+        if (isPlayerWin) {
+            // 自軍勝利
+            msg = `敵総大将・${loserName}、討ち取ったり！`;
+            winText = (winnerSide === 'EAST') ? "東軍 勝利" : "西軍 勝利";
+            color = "#ffd700"; // Gold
+        } else {
+            // 自軍敗北
+            msg = `無念…総大将、${loserName}殿、討ち死に…`;
+            const loserSideText = (winnerSide === 'EAST') ? "西軍" : "東軍";
+            winText = `${loserSideText} 敗北`;
+            color = "#aaaaaa"; // Gray
+        }
 
         const vs = document.getElementById('victory-screen');
         vs.style.display = 'flex';
         document.getElementById('vic-msg-1').innerText = msg;
         document.getElementById('vic-msg-2').innerText = winText;
-        document.getElementById('vic-msg-2').style.color = (winnerSide === 'EAST') ? C_EAST : C_WEST;
+        document.getElementById('vic-msg-2').style.color = color;
     }
 
     loop() {
