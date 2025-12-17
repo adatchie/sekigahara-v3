@@ -3,7 +3,7 @@
  * メインゲームロジックとループ
  */
 
-import { HEX_SIZE, C_EAST, C_WEST, C_SEL_BOX, C_SEL_BORDER, WARLORDS, UNIT_TYPE_HEADQUARTERS, FORMATION_HOKO, FORMATION_KAKUYOKU, FORMATION_GYORIN } from './constants.js';
+import { HEX_SIZE, C_EAST, C_WEST, C_SEL_BOX, C_SEL_BORDER, WARLORDS, UNIT_TYPE_HEADQUARTERS, FORMATION_HOKO, FORMATION_KAKUYOKU, FORMATION_GYORIN } from './constants.js?v=2';
 import { AudioEngine } from './audio.js';
 import { MapSystem } from './map.js?v=2';
 import { RenderingEngine3D } from './rendering3d.js?v=6';
@@ -598,9 +598,23 @@ export class Game {
 
             let ord = "待機";
             if (headquarters.order) {
-                if (headquarters.order.type === 'MOVE') ord = `移動`;
-                else if (headquarters.order.type === 'ATTACK') ord = `攻撃`;
-                else if (headquarters.order.type === 'PLOT') ord = `調略`;
+                const target = this.units.find(u => u.id === headquarters.order.targetId);
+                const targetName = target ? target.name : "地点";
+                const typeMap = { 'MOVE': '移動', 'ATTACK': '攻撃', 'PLOT': '調略' };
+                ord = `<span style="color:#aaf">${typeMap[headquarters.order.type]}</span> -> ${targetName}`;
+            }
+
+            // 顔グラフィック（あれば表示）
+            if (headquarters.face) {
+                const faceImg = document.createElement('img');
+                faceImg.src = `portraits/${headquarters.face}`;
+                faceImg.style.width = '48px';
+                faceImg.style.height = '72px';
+                faceImg.style.objectFit = 'cover';
+                faceImg.style.borderRadius = '4px';
+                faceImg.style.boxShadow = '0 0 5px rgba(0,0,0,0.5)';
+                faceImg.onerror = () => { faceImg.style.display = 'none'; }; // 404なら非表示
+                d.appendChild(faceImg);
             }
 
             const img = document.createElement('img');
@@ -608,6 +622,7 @@ export class Game {
             if (headquarters.imgCanvas) {
                 img.src = headquarters.imgCanvas.toDataURL();
             }
+            d.appendChild(img);
 
             const info = document.createElement('div');
             info.style.flex = '1';
