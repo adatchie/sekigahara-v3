@@ -437,10 +437,39 @@ export class CombatSystem {
 
         // 攻撃側から防御側への攻撃線
         this.addEffect('BEAM', { q: att.q, r: att.r }, { q: def.q, r: def.r }, '#ffaa00');
-        siegers.forEach(s => this.addEffect('BEAM', { q: s.q, r: s.r }, { q: def.q, r: def.r }, '#ffaa00'));
+
+        // 陣営色を取得するローカル関数
+        const getSideColor = (side) => {
+            if (side === 'EAST') return 0x6666FF; // 青（少し明るめ）
+            if (side === 'WEST') return 0xFF4444; // 赤
+            return 0xAAAAAA;
+        };
+
+        // 攻撃ユニットを少し光らせる
+        this.addEffect('UNIT_FLASH', { unitId: att.id, color: getSideColor(att.side), duration: 10 });
+
+        siegers.forEach(s => {
+            const siegeColor = getSideColor(s.side);
+            this.addEffect('BEAM', { q: s.q, r: s.r }, { q: def.q, r: def.r }, '#ffaa00');
+            // 包囲参加ユニットのHEXを点滅させる
+            this.addEffect('HEX_FLASH', { q: s.q, r: s.r, color: siegeColor });
+            // ユニット自体も少し光らせる
+            this.addEffect('UNIT_FLASH', { unitId: s.id, color: siegeColor, duration: 30 });
+        });
 
         // 戦闘エフェクト: 土煙と火花を追加
         this.addEffect('DUST', { q: def.q, r: def.r }, null, null);
+        // 攻撃アニメーション（突撃）
+        if (this.renderingEngine && this.renderingEngine.triggerUnitAttackAnimation) {
+            this.renderingEngine.triggerUnitAttackAnimation(att.id, def.id);
+            siegers.forEach(s => {
+                this.renderingEngine.triggerUnitAttackAnimation(s.id, def.id);
+            });
+        }
+
+        // 突撃の予備動作時間（少し待ってからエフェクト）
+        await this.wait(300);
+
         this.spawnSparks(att, def); // 攻撃側と防御側の間に火花
 
         this.audioEngine.sfxHit();
@@ -536,11 +565,61 @@ export class CombatSystem {
         let msg, color;
 
         if (isHeadquarters) {
-            // 本陣ユニット: 従来の「討ち取った」メッセージ
-            msg = (unit.side === this.playerSide) ?
-                `無念… ${unit.name} 討ち死に！` :
-                `敵将・${unit.name}、討ち取ったり！`;
-            color = (unit.side === this.playerSide) ? '#aaa' : '#ff0';
+            // 総大将判定
+            const isCommander = (unit.name === "徳川家康" || unit.name === "石田三成");
+
+            if (unit.side !== this.playerSide) {
+                // 敵本陣の場合、討ち死にか敗走かをランダムで決定
+                // 将来的には士気などが関わる予定
+                if (Math.random() < 0.5) {
+                    // パターンA: 敗走（撤退）
+                    if (isCommander) {
+                        msg = `敵総大将・${unit.name}、戦場より撤退！`;
+                    } else {
+                        msg = `${unit.name}、戦場より撤退！`;
+                    }
+                    color = '#ffa500'; // オレンジ色
+
+                    // 顔グラフィックのカットイン表示
+                    if (unit.face) {
+                        this.showWarlordCutIn(unit, 'ROUT');
+                    }
+                } else {
+                    // パターンB: 討ち死に
+                    if (isCommander) {
+                        msg = `敵総大将・${unit.name}、討ち取ったり！`;
+                    } else {
+                        msg = `敵将${unit.name}、討ち取ったり！`;
+                    }
+                    color = '#ff0';
+
+                    // 顔グラフィックのカットイン表示（討ち死に用）
+                    if (unit.face) {
+                        this.showWarlordCutIn(unit, 'DEATH');
+                    }
+                }
+            } else {
+                // 味方本陣の場合
+                if (Math.random() < 0.5) {
+                    // 敗走
+                    if (isCommander) {
+                        msg = `総大将・${unit.name}、戦場より撤退！`;
+                    } else {
+                        msg = `${unit.name}、戦場より撤退！`;
+                    }
+                    color = '#ffa500';
+                    if (unit.face) {
+                        this.showWarlordCutIn(unit, 'ROUT');
+                    }
+                } else {
+                    // 討ち死に
+                    msg = `無念… ${unit.name} 討ち死に！`;
+                    color = '#aaa';
+                    if (unit.face) {
+                        this.showWarlordCutIn(unit, 'DEATH');
+                    }
+                }
+            }
         } else {
             // 配下部隊: 「撃破/壊滅」メッセージ
             msg = (unit.side === this.playerSide) ?
@@ -549,6 +628,7 @@ export class CombatSystem {
             color = (unit.side === this.playerSide) ? '#aaa' : '#ffa500';
         }
 
+        // テキスト表示
         const div = document.createElement('div');
         div.className = 'vic-title';
         div.innerText = msg;
@@ -560,10 +640,75 @@ export class CombatSystem {
         div.style.zIndex = 150;
         div.style.pointerEvents = 'none';
         div.style.whiteSpace = 'nowrap';
+        // テキストシャドウやフォントサイズを強化
+        div.style.fontSize = isHeadquarters ? '36px' : '24px';
+        div.style.textShadow = '2px 2px 4px #000';
+
         document.getElementById('game-container').appendChild(div);
         setTimeout(() => div.remove(), 3000);
 
         await this.wait(1000);
+    }
+
+    /**
+     * 武将のカットインを表示（敗走時など）
+     * @param {Object} unit
+     * @param {string} type 'ROUT' | 'DEATH'
+     */
+    showWarlordCutIn(unit, type) {
+        const container = document.getElementById('game-container');
+
+        // 画像要素作成
+        const img = document.createElement('img');
+        img.src = `portraits/${unit.face}`;
+        img.style.position = 'absolute';
+        img.style.top = '50%';
+        img.style.left = '50%';
+        img.style.transform = 'translate(-50%, -50%) scale(0.5)';
+        img.style.maxHeight = '60%';
+        img.style.zIndex = 140; // テキスト(150)の後ろ
+        img.style.opacity = '0';
+        img.style.transition = 'all 0.5s ease-out';
+        img.style.pointerEvents = 'none';
+
+        container.appendChild(img);
+
+        // アニメーション開始
+        requestAnimationFrame(() => {
+            img.style.opacity = '1';
+            img.style.transform = 'translate(-50%, -50%) scale(1.0)';
+        });
+
+        if (type === 'DEATH') {
+            // 討ち死に演出: 表示 -> モノクロ -> 散る（拡散して消える）
+            setTimeout(() => {
+                // モノクロ化
+                img.style.filter = 'grayscale(100%) contrast(1.2) brightness(0.8)';
+                img.style.transition = 'filter 1.0s ease, transform 0.2s';
+
+                // 少し揺らして衝撃を表現
+                img.style.transform = 'translate(-50%, -50%) scale(1.05)';
+                setTimeout(() => img.style.transform = 'translate(-50%, -50%) scale(1.0)', 100);
+
+                // 散る演出
+                setTimeout(() => {
+                    img.style.transition = 'all 1.5s ease-out';
+                    img.style.opacity = '0';
+                    img.style.transform = 'translate(-50%, -50%) scale(1.5)';
+                    img.style.filter = 'grayscale(100%) blur(10px)'; // ぼやけて消える
+
+                    setTimeout(() => img.remove(), 1500);
+                }, 1200); // モノクロを見てる時間
+            }, 800); // 最初の表示時間
+
+        } else {
+            // 敗走演出: 表示 -> フレームアウト or フェードアウト
+            setTimeout(() => {
+                img.style.opacity = '0';
+                img.style.transform = 'translate(-50%, -50%) scale(0.8)'; // 奥に引っ込む感じ
+                setTimeout(() => img.remove(), 500);
+            }, 2000);
+        }
     }
 
     // ユーティリティ関数

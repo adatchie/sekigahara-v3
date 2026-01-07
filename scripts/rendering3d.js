@@ -55,6 +55,12 @@ export class RenderingEngine3D {
             RIGHT: THREE.MOUSE.PAN     // 右ドラッグ：平行移動（パン）
         };
 
+        // タッチ操作の割り当て（1本指をゲーム操作用に開放）
+        this.controls.touches = {
+            ONE: null, // 1本指ドラッグ：無効（範囲選択などに使用）
+            TWO: THREE.TOUCH.DOLLY_PAN // 2本指：移動とズーム
+        };
+
         // マウス位置追跡（画面端での回転用）
         this.mouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
         this.isRightMouseDown = false; // 右クリック状態
@@ -401,11 +407,44 @@ export class RenderingEngine3D {
                 this.scene.add(mesh);
             }
 
+            // アニメーション処理
+            let animOffset = new THREE.Vector3(0, 0, 0);
+            if (mesh.userData.attackAnim && mesh.userData.attackAnim.active) {
+                const anim = mesh.userData.attackAnim;
+                anim.progress++;
+
+                // 0.0 -> 1.0 -> 0.0 の動きを作る
+                const t = anim.progress / anim.duration;
+                let scale = 0;
+
+                if (t < 0.2) {
+                    // 突撃 (0.0 -> 1.0) 急速に
+                    scale = t / 0.2;
+                } else if (t < 0.4) {
+                    // 滞留
+                    scale = 1.0;
+                } else {
+                    // 戻る (1.0 -> 0.0) ゆっくり
+                    scale = 1.0 - (t - 0.4) / 0.6;
+                }
+
+                if (t >= 1.0) {
+                    anim.active = false;
+                    scale = 0;
+                }
+
+                animOffset.copy(anim.offsetVec).multiplyScalar(scale);
+            }
+
             // 位置更新
-            const targetPos = this.hexToWorld3D(unit.q, unit.r);
+            // アニメーション適用時は強制更新したいので、距離チェック条件を変更
+            const rawPos = this.hexToWorld3D(unit.q, unit.r);
+            const targetPos = new THREE.Vector3(rawPos.x, rawPos.y, rawPos.z);
+            targetPos.add(animOffset);
 
             // 現在位置とターゲット位置が離れている場合のみ更新（パフォーマンス最適化）
-            if (Math.abs(mesh.position.x - targetPos.x) > 0.1 || Math.abs(mesh.position.z - targetPos.z) > 0.1) {
+            // アニメーション中は常に更新
+            if (animOffset.lengthSq() > 0 || Math.abs(mesh.position.x - targetPos.x) > 0.1 || Math.abs(mesh.position.z - targetPos.z) > 0.1) {
                 mesh.position.x = targetPos.x;
                 mesh.position.z = targetPos.z;
 
@@ -425,7 +464,11 @@ export class RenderingEngine3D {
             // 選択状態のハイライト更新
             const isSelected = window.game && window.game.selectedUnits && window.game.selectedUnits.some(u => u.id === unit.id);
             if (mesh.material) {
-                if (isSelected) {
+                if (mesh.userData.flashTime > 0) {
+                    // フラッシュ中
+                    mesh.material.emissive.setHex(mesh.userData.flashColor || 0xFFFFFF);
+                    mesh.userData.flashTime--;
+                } else if (isSelected) {
                     mesh.material.emissive.setHex(0x666666); // 白く発光
                 } else {
                     mesh.material.emissive.setHex(0x000000); // 通常
@@ -869,6 +912,12 @@ export class RenderingEngine3D {
             }
         } else if (type === 'BUBBLE') {
             this.createBubble(arg1);
+        } else if (type === 'HEX_FLASH') {
+            // arg1: {q, r, color}
+            this.createHexFlash(arg1);
+        } else if (type === 'UNIT_FLASH') {
+            // arg1: {unitId, color, duration}
+            this.triggerUnitFlash(arg1);
         }
     }
 
@@ -934,7 +983,11 @@ export class RenderingEngine3D {
         const sprite = new THREE.Sprite(material);
 
         sprite.position.set(pos.x, pos.y, pos.z);
-        sprite.scale.set(60, 15, 1);
+
+        // 基本サイズを設定（data.sizeがあれば使用、デフォルト60）
+        const baseSize = data.size || 60;
+        sprite.scale.set(baseSize, baseSize * 0.25, 1);
+        sprite.userData = { baseScale: baseSize };
 
         this.scene.add(sprite);
 
@@ -1111,6 +1164,84 @@ export class RenderingEngine3D {
         });
     }
 
+    createHexFlash(data) {
+        // data: { q, r, color }
+        const center = this.hexToWorld3D(data.q, data.r);
+        const vertices = this.getHexagonVertices(data.q, data.r);
+
+        const shape = new THREE.Shape();
+        // 中心からの相対座標に変換
+        shape.moveTo(vertices[0].x - center.x, vertices[0].z - center.z);
+        for (let i = 1; i < vertices.length; i++) {
+            shape.lineTo(vertices[i].x - center.x, vertices[i].z - center.z);
+        }
+        shape.lineTo(vertices[0].x - center.x, vertices[0].z - center.z);
+
+        const geometry = new THREE.ShapeGeometry(shape);
+        const material = new THREE.MeshBasicMaterial({
+            color: data.color || 0xffff00,
+            transparent: true,
+            opacity: 0.8,
+            side: THREE.DoubleSide
+        });
+
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.rotation.x = -Math.PI / 2;
+        mesh.position.set(center.x, 2, center.z); // 地面より少し上
+        this.scene.add(mesh);
+
+        this.effects.push({
+            mesh: mesh,
+            type: 'HEX_FLASH',
+            life: 40,
+            maxLife: 40
+        });
+    }
+
+    triggerUnitFlash(data) {
+        // data: { unitId, color, duration }
+        const mesh = this.unitMeshes.get(data.unitId);
+        if (mesh) {
+            mesh.userData.flashColor = data.color || 0xFFFFFF;
+            mesh.userData.flashTime = data.duration || 20;
+        }
+    }
+
+    triggerUnitAttackAnimation(unitId, targetId) {
+        const mesh = this.unitMeshes.get(unitId);
+        // targetIdからユニットを探す（meshがまだない可能性もあるためgameStateから）
+        const targetUnit = window.gameState.units.find(u => u.id === targetId);
+
+        if (mesh && targetUnit) {
+            // 現在のユニット位置（HEX中心）
+            const unit = window.gameState.units.find(u => u.id === unitId);
+            if (!unit) return;
+
+            const startPos = this.hexToWorld3D(unit.q, unit.r);
+            const targetPos = this.hexToWorld3D(targetUnit.q, targetUnit.r);
+
+            // ターゲット方向へのベクトル
+            const dir = new THREE.Vector3().subVectors(targetPos, startPos);
+            // Y成分（高さ）の差は無視して水平移動だけにする
+            dir.y = 0;
+
+            const dist = dir.length();
+            if (dist > 0) dir.normalize();
+
+            // 距離の半分ちょい手前まで (あまり近づきすぎるとめり込むので調整)
+            // HEX_SIZE(40) * 1.5 程度がユニットサイズなので、HEX間距離(約70)の半分=35くらい
+            // dist * 0.4 くらいが適当か
+            const moveVec = dir.multiplyScalar(dist * 0.45);
+
+            mesh.userData.attackAnim = {
+                active: true,
+                progress: 0,
+                duration: 40, // 全体フレーム数（約0.7秒）
+                offsetVec: moveVec
+            };
+        }
+    }
+
     updateEffects() {
         for (let i = this.effects.length - 1; i >= 0; i--) {
             const effect = this.effects[i];
@@ -1121,6 +1252,14 @@ export class RenderingEngine3D {
             } else if (effect.type === 'FLOAT_TEXT') {
                 effect.mesh.position.add(effect.velocity);
                 effect.mesh.material.opacity = effect.life / effect.maxLife;
+
+                // 距離に応じてサイズを調整（遠くても見やすく）
+                // カメラからの距離を取得
+                const dist = effect.mesh.position.distanceTo(this.camera.position);
+                // 基準距離(500)より遠い場合は拡大する
+                const scaleFactor = Math.max(1, dist / 500);
+                const base = effect.mesh.userData.baseScale || 60;
+                effect.mesh.scale.set(base * scaleFactor, base * 0.25 * scaleFactor, 1);
             } else if (effect.type === 'BUBBLE') {
                 effect.mesh.position.add(effect.velocity);
                 effect.mesh.material.opacity = Math.min(1, effect.life / 20); // 最後だけフェードアウト
@@ -1146,6 +1285,11 @@ export class RenderingEngine3D {
                 }
                 effect.mesh.geometry.attributes.position.needsUpdate = true;
                 effect.mesh.material.opacity = effect.life / effect.maxLife;
+            } else if (effect.type === 'HEX_FLASH') {
+                // 点滅しながら消える
+                const progress = effect.life / effect.maxLife;
+                const flash = (Math.sin(progress * Math.PI * 4) + 1) / 2; // 2回点滅
+                effect.mesh.material.opacity = flash * 0.8;
             }
 
             if (effect.life <= 0) {

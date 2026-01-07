@@ -3,14 +3,14 @@
  * メインゲームロジックとループ
  */
 
-import { HEX_SIZE, C_EAST, C_WEST, C_SEL_BOX, C_SEL_BORDER, WARLORDS, UNIT_TYPE_HEADQUARTERS, FORMATION_HOKO, FORMATION_KAKUYOKU, FORMATION_GYORIN } from './constants.js?v=4';
+import { HEX_SIZE, C_EAST, C_WEST, C_SEL_BOX, C_SEL_BORDER, WARLORDS, UNIT_TYPE_HEADQUARTERS, FORMATION_HOKO, FORMATION_KAKUYOKU, FORMATION_GYORIN } from './constants.js?v=10';
 import { AudioEngine } from './audio.js';
 import { MapSystem } from './map.js?v=2';
-import { RenderingEngine3D } from './rendering3d.js?v=24';
-import { generatePortrait } from './rendering.js';
-import { CombatSystem } from './combat.js?v=6';
+import { RenderingEngine3D } from './rendering3d.js?v=28';
+import { generatePortrait } from './rendering.js?v=2';
+import { CombatSystem } from './combat.js?v=13';
 import { AISystem } from './ai.js';
-import { UnitManager } from './unit-manager.js?v=2';
+import { UnitManager } from './unit-manager.js?v=3';
 import { hexToPixel, pixelToHex, isValidHex, getDistRaw } from './pathfinding.js';
 import { FORMATION_INFO, getAvailableFormations } from './formation.js?v=3';
 
@@ -62,6 +62,12 @@ export class Game {
         this.canvas.addEventListener('wheel', (e) => this.onWheel(e));
         window.addEventListener('keydown', (e) => this.onKeyDown(e));
 
+        // タッチ操作のリスナーを追加
+        this.canvas.addEventListener('touchstart', (e) => this.onTouchStart(e), { passive: false });
+        // touchmoveとtouchendはwindowで受けて、ドラッグが画面外に出ても追跡できるようにする
+        window.addEventListener('touchmove', (e) => this.onTouchMove(e), { passive: false });
+        window.addEventListener('touchend', (e) => this.onTouchEnd(e), { passive: false });
+
         // 選択ボックス用要素を作成
         this.selectionBox = document.createElement('div');
         this.selectionBox.style.position = 'absolute';
@@ -94,7 +100,7 @@ export class Game {
 
         // マルチユニット初期化: 各武将から複数ユニットを生成
         WARLORDS.forEach((warlord, warlordId) => {
-            this.unitManager.createUnitsFromWarlord(warlord, warlordId, WARLORDS);
+            this.unitManager.createUnitsFromWarlord(warlord, warlordId, WARLORDS, this.mapSystem);
         });
 
         // 全ユニットを取得
@@ -267,19 +273,7 @@ export class Game {
             this.input.curr = { x: e.clientX, y: e.clientY };
 
             // 選択ボックスを描画
-            const startX = Math.min(this.input.start.x, this.input.curr.x);
-            const startY = Math.min(this.input.start.y, this.input.curr.y);
-            const width = Math.abs(this.input.curr.x - this.input.start.x);
-            const height = Math.abs(this.input.curr.y - this.input.start.y);
-
-            // 一定以上のドラッグでボックスを表示
-            if (width > 5 || height > 5) {
-                this.selectionBox.style.left = startX + 'px';
-                this.selectionBox.style.top = startY + 'px';
-                this.selectionBox.style.width = width + 'px';
-                this.selectionBox.style.height = height + 'px';
-                this.selectionBox.style.display = 'block';
-            }
+            this.updateSelectionBox();
         }
     }
 
@@ -302,6 +296,84 @@ export class Game {
 
     onWheel(e) {
         // ズームはOrbitControlsが処理する
+    }
+
+    // タッチ操作のハンドリング
+    onTouchStart(e) {
+        // 1本指の場合のみ、選択操作として処理
+        // OrbitControlsの設定でONE: nullにしているので回転とは競合しないはず
+        if (e.touches.length === 1) {
+            // e.preventDefault(); // これを呼ぶとクリックなどが発火しなくなる場合があるので注意
+            // ただし、スクロールなどを防ぐ意味では呼んだほうが良い
+
+            this.input.isLeftDown = true;
+            const touch = e.touches[0];
+            this.input.start = { x: touch.clientX, y: touch.clientY };
+            this.input.curr = { x: touch.clientX, y: touch.clientY };
+        }
+    }
+
+    onTouchMove(e) {
+        // 1本指ドラッグ中
+        if (this.input.isLeftDown && e.touches.length === 1) {
+            e.preventDefault(); // スクロール防止
+
+            const touch = e.touches[0];
+            this.input.curr = { x: touch.clientX, y: touch.clientY };
+
+            // 選択ボックスを描画 (onMouseMoveのロジックを使用)
+            this.updateSelectionBox();
+        }
+    }
+
+    onTouchEnd(e) {
+        // タッチ終了時
+        // e.touchesは終了したタッチを含まないが、changedTouchesで取得可能
+        // ただし、this.input.isLeftDownがtrueなら、処理を行う
+        if (this.input.isLeftDown) {
+            // まだ指が残っているかチェック（マルチタッチからの変化など）
+            if (e.touches.length > 0) {
+                // まだ他の指がある場合は終了しない（かも？）
+                // ここではシンプルに、開始した指が離れたと仮定
+            }
+
+            this.input.isLeftDown = false;
+            this.selectionBox.style.display = 'none';
+
+            // ボックス判定 or クリック判定
+            // タッチの場合、指の太さでズレやすいので許容誤差を少し大きめに(10px)
+            // タッチ終了時の座標はchangedTouchesにあるが、
+            // moveイベントで更新したthis.input.currを使うのが確実
+
+            const dist = Math.hypot(this.input.curr.x - this.input.start.x, this.input.curr.y - this.input.start.y);
+
+            if (dist < 10) {
+                // クリック（タップ）とみなす
+                this.handleLeftClick(this.input.curr.x, this.input.curr.y);
+            } else {
+                // ボックス選択
+                this.handleBoxSelect();
+            }
+        }
+    }
+
+    // 選択ボックスの描画処理を共通化
+    updateSelectionBox() {
+        const startX = Math.min(this.input.start.x, this.input.curr.x);
+        const startY = Math.min(this.input.start.y, this.input.curr.y);
+        const width = Math.abs(this.input.curr.x - this.input.start.x);
+        const height = Math.abs(this.input.curr.y - this.input.start.y);
+
+        // 一定以上のドラッグでボックスを表示
+        if (width > 5 || height > 5) {
+            this.selectionBox.style.left = startX + 'px';
+            this.selectionBox.style.top = startY + 'px';
+            this.selectionBox.style.width = width + 'px';
+            this.selectionBox.style.height = height + 'px';
+            this.selectionBox.style.display = 'block';
+        } else {
+            this.selectionBox.style.display = 'none';
+        }
     }
 
     onKeyDown(e) {
@@ -547,6 +619,23 @@ export class Game {
             img.className = 'portrait';
             if (targetHeadquarters.imgCanvas) {
                 img.src = targetHeadquarters.imgCanvas.toDataURL();
+            }
+
+            // 顔グラフィック（あれば表示）
+            if (targetHeadquarters.face) {
+                const faceImg = document.createElement('img');
+                faceImg.src = `portraits/${targetHeadquarters.face}`;
+                faceImg.style.width = '48px';
+                faceImg.style.height = '72px';
+                faceImg.style.objectFit = 'cover';
+                faceImg.style.borderRadius = '4px';
+                faceImg.style.boxShadow = '0 0 5px rgba(0,0,0,0.5)';
+                faceImg.style.marginRight = '8px';
+
+                faceImg.onerror = () => {
+                    faceImg.style.display = 'none';
+                };
+                targetDiv.appendChild(faceImg);
             }
 
             const info = document.createElement('div');

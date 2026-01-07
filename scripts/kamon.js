@@ -124,6 +124,15 @@ export class KamonDrawer {
             case 'MUTSUBOSHI': // 六つ星（戸田）
                 this.drawMutsuboshi(ctx, size);
                 break;
+            case 'MUTSUBOSHI': // 六つ星（戸田）
+                this.drawMutsuboshi(ctx, size);
+                break;
+            case 'IKEDA_CHO': // 池田蝶（池田）
+                this.drawIkedaCho(ctx, size);
+                break;
+            case 'MARUNI_MITSUBONSUGI': // 丸に三本杉（戸川）
+                this.drawMaruniMitsubonsugi(ctx, size);
+                break;
             default:
                 this.drawDefault(ctx, size);
                 break;
@@ -1203,5 +1212,129 @@ export class KamonDrawer {
             ctx.arc(x, y, starSize, 0, Math.PI * 2);
             ctx.fill();
         }
+    }
+
+
+    /**
+     * 池田蝶（池田輝政）
+     * 備前蝶
+     */
+    static drawIkedaCho(ctx, size) {
+        ctx.fillStyle = '#fff';
+
+        // 蝶の全体シルエット
+        // 上の羽（大きく）
+        ctx.beginPath();
+        ctx.ellipse(0, -size * 0.2, size * 0.5, size * 0.35, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 下の羽（少し小さく、垂れ下がる）
+        ctx.beginPath();
+        ctx.ellipse(-size * 0.3, size * 0.3, size * 0.25, size * 0.4, 0.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(size * 0.3, size * 0.3, size * 0.25, size * 0.4, -0.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 胴体
+        ctx.fillStyle = '#000'; // 白抜きにするための黒（背景色次第だが、簡易的に黒で抜く）
+        // 家紋描画は基本白で描いて、抜きは背景色を使うべきだが、
+        // ここでは fillStyle を背景色に変える必要がある。
+        // 引数に bgColor があるのでそれを使うのがベストだが、
+        // ここでは白塗りの上に黒を描くことで「抜き」を表現する
+
+        // 胴体（中心のくびれ）
+        ctx.beginPath();
+        ctx.ellipse(0, 0, size * 0.12, size * 0.4, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 触角
+        ctx.strokeStyle = '#fff'; // 触角は白
+        ctx.lineWidth = size * 0.04;
+        ctx.beginPath();
+        ctx.moveTo(-size * 0.05, -size * 0.3);
+        ctx.quadraticCurveTo(-size * 0.2, -size * 0.6, 0, -size * 0.7);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(size * 0.05, -size * 0.3);
+        ctx.quadraticCurveTo(size * 0.2, -size * 0.6, 0, -size * 0.7); // 先端で交差させる
+        ctx.stroke();
+
+        // 羽の紋様（円形）を描いて装飾
+        ctx.fillStyle = '#000'; // 抜き
+
+        // 上翅の紋
+        ctx.beginPath();
+        ctx.arc(-size * 0.25, -size * 0.2, size * 0.08, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(size * 0.25, -size * 0.2, size * 0.08, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    /**
+     * 丸に三本杉（戸川達安）
+     */
+    static drawMaruniMitsubonsugi(ctx, size) {
+        // 丸枠
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = size * 0.08;
+        ctx.beginPath();
+        ctx.arc(0, 0, size * 0.85, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.fillStyle = '#fff';
+
+        const drawTree = (ox, oy, s) => {
+            ctx.save();
+            ctx.translate(ox, oy);
+            ctx.scale(s, s);
+
+            // 幹
+            ctx.beginPath();
+            ctx.rect(-size * 0.04, -size * 0.1, size * 0.08, size * 0.8);
+            ctx.fill();
+
+            // 葉の層
+            const layers = 4;
+            for (let i = 0; i < layers; i++) {
+                const y = -size * 0.4 + (i * size * 0.22);
+                const w = size * (0.15 + i * 0.08);
+
+                ctx.beginPath();
+                ctx.moveTo(0, y - size * 0.15);
+                ctx.lineTo(w, y + size * 0.05);
+                ctx.lineTo(0, y + size * 0.02);
+                ctx.lineTo(-w, y + size * 0.05);
+                ctx.closePath();
+                ctx.fill();
+            }
+
+            // 幹の線（抜き）
+            ctx.strokeStyle = '#000';
+            ctx.globalCompositeOperation = 'source-over'; // 単純に黒で描く（背景が暗い前提）
+            // 注意: #000は黒。背景(bg)が#222のとき、ほぼ同色で見えなくなる＝抜きに見える。
+
+            ctx.lineWidth = size * 0.04;
+            ctx.beginPath();
+            ctx.moveTo(0, -size * 0.5);
+            ctx.lineTo(0, size * 0.6);
+            ctx.stroke();
+
+            // 根
+            ctx.beginPath();
+            ctx.moveTo(0, size * 0.6);
+            ctx.lineTo(-size * 0.1, size * 0.7);
+            ctx.moveTo(0, size * 0.6);
+            ctx.lineTo(size * 0.1, size * 0.7);
+            ctx.stroke();
+
+            ctx.restore();
+        };
+
+        drawTree(0, -size * 0.1, 1.0);
+        drawTree(-size * 0.48, 0, 0.9);
+        drawTree(size * 0.48, 0, 0.9);
     }
 }

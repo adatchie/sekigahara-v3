@@ -30,7 +30,7 @@ export class UnitManager {
      * @param {Array} allWarlords - 全武将データ（配置重複チェック用）
      * @returns {Array} 生成されたユニット配列
      */
-    createUnitsFromWarlord(warlord, warlordId, allWarlords = []) {
+    createUnitsFromWarlord(warlord, warlordId, allWarlords = [], mapSystem = null) {
         // 必要なユニット数を計算
         const totalUnits = Math.ceil(warlord.soldiers / SOLDIERS_PER_UNIT);
 
@@ -43,7 +43,7 @@ export class UnitManager {
         );
 
         // 螺旋状の配置座標を生成
-        const positions = this.generateSpiralPositions(hqPosition.q, hqPosition.r, totalUnits);
+        const positions = this.generateSpiralPositions(hqPosition.q, hqPosition.r, totalUnits, mapSystem);
 
         // 各ユニットに兵力を分配
         const soldierDistribution = this.distributeSoldiers(warlord.soldiers, totalUnits);
@@ -177,7 +177,7 @@ export class UnitManager {
      * @param {number} count - 生成する座標の数
      * @returns {Array<{q: number, r: number}>} 座標配列
      */
-    generateSpiralPositions(centerQ, centerR, count) {
+    generateSpiralPositions(centerQ, centerR, count, mapSystem = null) {
         const positions = [{ q: centerQ, r: centerR }];
 
         if (count <= 1) return positions;
@@ -204,7 +204,19 @@ export class UnitManager {
             // 6方向それぞれにring個ずつ配置
             for (let dir = 0; dir < 6 && positions.length < count; dir++) {
                 for (let step = 0; step < ring && positions.length < count; step++) {
-                    positions.push({ q: currentQ, r: currentR });
+                    // mapSystemがある場合、地形チェックを行う
+                    let isValidTerrain = true;
+                    if (mapSystem) {
+                        const tile = mapSystem.getTile(currentQ, currentR);
+                        if (tile && (tile.type === 'MTN' || tile.type === 'RIVER')) {
+                            // 山や川には配置しない
+                            isValidTerrain = false;
+                        }
+                    }
+
+                    if (isValidTerrain) {
+                        positions.push({ q: currentQ, r: currentR });
+                    }
 
                     // 次の位置へ移動
                     currentQ += directions[dir].q;
@@ -213,6 +225,8 @@ export class UnitManager {
             }
 
             ring++;
+            // 安全策：無限ループ防止（あまりにも見つからない場合）
+            if (ring > 20) break;
         }
 
         return positions.slice(0, count);
